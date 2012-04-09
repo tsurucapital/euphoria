@@ -41,7 +41,9 @@ module FRP.Euphoria.Event
 , takeWhileE
 , partitionEithersE
 , groupByE
+, groupWithInitialByE
 , groupE
+, groupWithInitialE
 , differentE
 -- ** Other event operations
 , delayE
@@ -394,18 +396,29 @@ partitionEithersE evt = do
 -- to a span of consecutive occurrences of equivalent elements in the original
 -- stream. Equivalence is tested using @eqv@.
 groupByE :: (a -> a -> Bool) -> Event a -> SignalGen (Event (Event a))
-groupByE eqv sourceEvt = do
+groupByE eqv sourceEvt = fmap snd <$> groupWithInitialByE eqv sourceEvt
+
+-- | @groupWithInitialByE eqv evt@ creates a stream of event streams, each corresponding
+-- to a span of consecutive occurrences of equivalent elements in the original
+-- stream. Equivalence is tested using @eqv@. In addition, each outer event
+-- occurrence contains the first occurrence of its inner event.
+groupWithInitialByE :: (a -> a -> Bool) -> Event a -> SignalGen (Event (a, Event a))
+groupWithInitialByE eqv sourceEvt = do
     networkE <- filterNothingE <$> scanAccumE Nothing (makeNetwork <$> sourceEvt)
     generatorE networkE
     where
         makeNetwork val currentVal
             | maybe False (eqv val) currentVal = (currentVal, Nothing)
-            | otherwise = (Just val, Just $ network val)
+            | otherwise = (Just val, Just $ (,) val <$> network val)
         network val = takeWhileE (eqv val) =<< dropWhileE (not . eqv val) sourceEvt
 
 -- | Same as @'groupByE' (==)@
 groupE :: (Eq a) => Event a -> SignalGen (Event (Event a))
 groupE = groupByE (==)
+
+-- | Same as @groupWithInitialByE (==)@
+groupWithInitialE :: (Eq a) => Event a -> SignalGen (Event (a, Event a))
+groupWithInitialE = groupWithInitialByE (==)
 
 -- | @eventToSignal evt@ is a signal whose value is the list of current
 -- occurrences of @evt@.
