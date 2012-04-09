@@ -25,7 +25,9 @@ module FRP.Euphoria.Event
 , accumB
 , accumBIO
 , accumE
+, accumEM
 , scanAccumE
+, scanAccumEM
 -- ** Filtering and other list-like operations
 , filterE
 , filterNothingE
@@ -221,6 +223,26 @@ accumE initial (Event evt) = fmap Event $ do
 -- | A useful special case of 'accumE'.
 scanAccumE :: s -> Event (s -> (s, a)) -> SignalGen (Event a)
 scanAccumE initial ev = (snd <$>) <$> accumE (initial, undefined) (f <$> ev)
+  where
+    f fn (s, _) = fn s
+
+-- | Monadic version of @accumE@.
+accumEM :: s -> Event (s -> SignalGen s) -> SignalGen (Event s)
+accumEM initial (Event evt) = fmap Event $ do
+  rec
+    prevState <- delayS initial (fst <$> state_out)
+    state_out <- generatorS $ stateGen <$> prevState <*> evt
+  memoS $ snd <$> state_out
+  where
+    stateGen prev occs = foldr app end occs prev []
+    app occ next val history = do
+      val' <- occ val
+      next val' (val':history)
+    end val history = return (val, reverse history)
+
+-- | A useful special case of @accumEM@.
+scanAccumEM :: s -> Event (s -> SignalGen (s, a)) -> SignalGen (Event a)
+scanAccumEM initial ev = (snd <$>) <$> accumEM (initial, undefined) (f <$> ev)
   where
     f fn (s, _) = fn s
 
