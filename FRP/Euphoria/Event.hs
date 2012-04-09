@@ -39,6 +39,7 @@ module FRP.Euphoria.Event
 , dropWhileE
 , takeE
 , takeWhileE
+, partitionEithersE
 , groupByE
 , groupE
 , differentE
@@ -376,6 +377,18 @@ generalPrefixE prefixTaker (Event evt) = do
     where
         upd True _ = pure []
         upd _ prev = prev
+
+-- | Split a stream of 'Either's into two, based on tags.
+partitionEithersE :: Event (Either a b) -> SignalGen (Event a, Event b)
+partitionEithersE evt = do
+    evt' <- memoE evt
+    return (mapMaybeE unleft evt', mapMaybeE unright evt')
+    where
+        unleft (Left x) = Just x
+        unleft _ = Nothing
+
+        unright (Right x) = Just x
+        unright _ = Nothing
 
 -- | @groupByE eqv evt@ creates a stream of event streams, each corresponding
 -- to a span of consecutive occurrences of equivalent elements in the original
