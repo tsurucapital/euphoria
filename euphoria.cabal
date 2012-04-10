@@ -66,6 +66,11 @@ maintainer:          aljee@hyper.cx <Takano Akio>
 category:            FRP
 build-type:          Simple
 cabal-version:       >=1.8
+homepage:            http://github.com/tsurucapital/euphoria
+
+source-repository head
+  type: git
+  location: git://github.com/tsurucapital/euphoria.git
 
 library
   exposed-modules:     FRP.Euphoria.Event, FRP.Euphoria.Signal, FRP.Euphoria.Update, FRP.Euphoria.Collection, FRP.Euphoria.Abbrev
