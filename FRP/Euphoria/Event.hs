@@ -54,6 +54,9 @@ module FRP.Euphoria.Event
 , generatorE
 -- * Discrete signals
 , Discrete
+-- ** Sampling 'Discrete's
+-- $sampling_discrete
+
 -- ** Accumulation
 , stepperD
 , stepperDefD
@@ -428,6 +431,12 @@ eventToSignal (Event x) = x
 -- | The inverse of 'eventToSignal'.
 signalToEvent :: Signal [a] -> Event a
 signalToEvent = Event
+
+-- $sampling_discrete
+-- 'Signal's can be sampled using 'apply' or equivalently '<@>'.
+-- However, currently there are no corresponding functions for 'Discrete'
+-- due to implementation difficulty. To sample a 'Discrete', you need to
+-- first convert it into a 'Signal' using 'discreteToSignal'.
 
 -- | @changesD dis@ is an event that occurs when the value of @dis@ may
 -- have changed. It never occurs more than once a step.
