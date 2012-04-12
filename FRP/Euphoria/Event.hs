@@ -4,7 +4,7 @@
 {-# LANGUAGE FlexibleInstances, FunctionalDependencies #-}
 
 {-# OPTIONS_GHC -Wall #-}
--- | Event/discrete layer constructed on top of Elera.
+-- | Event/discrete layer constructed on top of Elerea.
 -- The API is largely inspired by reactive-banana.
 module FRP.Euphoria.Event
 (
