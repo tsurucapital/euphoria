@@ -11,6 +11,7 @@ module FRP.Euphoria.Update
     , discreteToUpdate
     , mappendUpdateIO
     , startUpdateNetwork
+    , startUpdateNetworkWithValue
     ) where
 
 import Control.Applicative
@@ -169,14 +170,27 @@ startUpdateNetwork
     :: SignalGen (Update a)
     -> IO (IO a, IO ())
 startUpdateNetwork network = do
+    (sample, step) <- startUpdateNetworkWithValue network'
+    return (fst <$> sample, step)
+    where
+        network' = flip (,) (pure ()) <$> network
+
+-- | Execute a network that has both a continuous output and an
+-- accumulated updates.
+startUpdateNetworkWithValue :: SignalGen (Update a, Signal b) -> IO (IO (a, b), IO b)
+startUpdateNetworkWithValue network = do
     changesRef <- newIORef Nothing
+    valueRef <- newIORef undefined
     -- IORef (Maybe Changes)
     sample <- start $ do
-        update <- network
+        (update, signal) <- network
         case update of
             Update final updateE -> return $
-                updateRef changesRef final <$> eventToSignal updateE
-    return (join sample >> takeChanges changesRef, join sample)
+                (>>) <$> updateChanges <*> updateVal
+                where
+                    updateChanges = updateRef changesRef final <$> eventToSignal updateE
+                    updateVal = writeIORef valueRef <$> signal
+    return (join sample >> readBoth valueRef changesRef, join sample >> readIORef valueRef)
     where
         updateRef changesRef final occs = do
             changes <- readIORef changesRef
@@ -187,6 +201,10 @@ startUpdateNetwork network = do
                         -- FIXME: I believe it's possible to avoid unsafeCoerce here (akio)
                     in Changes final allChanges
             where !newChanges = mconcat occs
+
+        readBoth valueRef changesRef =
+            (,) <$> takeChanges changesRef
+                <*> readIORef valueRef
 
         takeChanges changesRef = do
             changes <- readIORef changesRef
