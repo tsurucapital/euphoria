@@ -40,6 +40,8 @@ module FRP.Euphoria.Event
 , takeE
 , takeWhileE
 , partitionEithersE
+, leftE
+, rightE
 , groupByE
 , groupWithInitialByE
 , groupE
@@ -104,6 +106,7 @@ import Control.Applicative
 import Control.Monad (join, replicateM)
 import Control.Monad.Fix
 import Data.Default
+import Data.Either (lefts, rights)
 import Data.List (foldl')
 import Data.Monoid
 import Data.Maybe
@@ -387,13 +390,15 @@ generalPrefixE prefixTaker (Event evt) = do
 partitionEithersE :: Event (Either a b) -> SignalGen (Event a, Event b)
 partitionEithersE evt = do
     evt' <- memoE evt
-    return (mapMaybeE unleft evt', mapMaybeE unright evt')
-    where
-        unleft (Left x) = Just x
-        unleft _ = Nothing
+    return (leftE evt', rightE evt')
 
-        unright (Right x) = Just x
-        unright _ = Nothing
+-- | Keep occurrences which are Left.
+leftE :: Event (Either e a) -> Event e
+leftE (Event evt) = Event $ lefts <$> evt
+
+-- | Keep occurrences which are Right.
+rightE :: Event (Either e a) -> Event a
+rightE (Event evt) = Event $ rights <$> evt
 
 -- | @groupByE eqv evt@ creates a stream of event streams, each corresponding
 -- to a span of consecutive occurrences of equivalent elements in the original
