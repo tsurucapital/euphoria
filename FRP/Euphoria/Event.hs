@@ -383,8 +383,20 @@ generalPrefixE prefixTaker (Event evt) = do
         active_occs <- prefixTaker (join eventSource)
     Event <$> memoS (snd <$> active_occs)
     where
-        upd True _ = pure []
-        upd _ prev = prev
+        upd done prev = ifelse done (pure []) prev
+
+        {-# NOINLINE ifelse #-}
+        ifelse b x y = if b then x else y
+
+        -- Here we hide an if expression from GHC's optimizer.
+        -- If GHC finds this conditional, its "state hack"
+        -- transforation turns the definition into:
+        --
+        -- upd done prev s = if done then [] else prev s
+        --
+        -- which is a disaster, because now (upd False prev)
+        -- doesn't reduce to prev. This means each iteration
+        -- the signal gets bigger and more expensive to evaluate.
 
 -- | Split a stream of 'Either's into two, based on tags.
 partitionEithersE :: Event (Either a b) -> SignalGen (Event a, Event b)
