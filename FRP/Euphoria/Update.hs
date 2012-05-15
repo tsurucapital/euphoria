@@ -12,6 +12,8 @@ module FRP.Euphoria.Update
     , mappendUpdateIO
     , startUpdateNetwork
     , startUpdateNetworkWithValue
+
+    , IOMonoid(..)
     ) where
 
 import Control.Applicative
