@@ -733,6 +733,45 @@ instance (SignalSet a, SignalSet b, SignalSet c) => SignalSet (a, b, c) where
     memoizeSignalSet (x, y, z) =
         (,,) <$> memoizeSignalSet x <*> memoizeSignalSet y <*> memoizeSignalSet z
 
+instance (SignalSet a, SignalSet b, SignalSet c, SignalSet d) =>
+        SignalSet (a, b, c, d) where
+    basicSwitchD dis = (,,,)
+        <$> (basicSwitchD $ e40 <$> dis)
+        <*> (basicSwitchD $ e41 <$> dis)
+        <*> (basicSwitchD $ e42 <$> dis)
+        <*> (basicSwitchD $ e43 <$> dis)
+        where
+            e40 (a, _, _, _) = a
+            e41 (_, a, _, _) = a
+            e42 (_, _, a, _) = a
+            e43 (_, _, _, a) = a
+    memoizeSignalSet (x0, x1, x2, x3) = (,,,)
+      <$> memoizeSignalSet x0
+      <*> memoizeSignalSet x1
+      <*> memoizeSignalSet x2
+      <*> memoizeSignalSet x3
+
+instance (SignalSet a, SignalSet b, SignalSet c, SignalSet d, SignalSet e) =>
+        SignalSet (a, b, c, d, e) where
+    basicSwitchD dis = (,,,,)
+        <$> (basicSwitchD $ e50 <$> dis)
+        <*> (basicSwitchD $ e51 <$> dis)
+        <*> (basicSwitchD $ e52 <$> dis)
+        <*> (basicSwitchD $ e53 <$> dis)
+        <*> (basicSwitchD $ e54 <$> dis)
+        where
+            e50 (a, _, _, _, _) = a
+            e51 (_, a, _, _, _) = a
+            e52 (_, _, a, _, _) = a
+            e53 (_, _, _, a, _) = a
+            e54 (_, _, _, _, a) = a
+    memoizeSignalSet (x0, x1, x2, x3, x4) = (,,,,)
+      <$> memoizeSignalSet x0
+      <*> memoizeSignalSet x1
+      <*> memoizeSignalSet x2
+      <*> memoizeSignalSet x3
+      <*> memoizeSignalSet x4
+
 -- | discreteToSignal outside the SignalGen monad.
 -- A careless use leads to repeated computation.
 discreteToSignalNoMemo :: Discrete a -> Signal a
