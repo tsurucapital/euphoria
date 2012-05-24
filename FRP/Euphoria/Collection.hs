@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DoRec, ScopedTypeVariables #-}
+{-# LANGUAGE DoRec, ScopedTypeVariables, DeriveFunctor #-}
 
 -- | Collection signals with incremental updates.
 module FRP.Euphoria.Collection
@@ -27,6 +27,7 @@ import FRP.Euphoria.Event
 data CollectionUpdate k a
     = AddItem k a
     | RemoveItem k
+    deriving (Functor)
 
 -- | An FRP interface for representing an incrementally updated
 -- collection of items. The items are identified by a unique key.

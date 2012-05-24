@@ -17,6 +17,7 @@ module FRP.Euphoria.Event
 , signalToEvent
 -- ** Sampling
 , apply
+, applyFunction
 , eventToSignal
 -- ** State accumulation
 -- | With these functions, any input event occurrence will affect the output
@@ -124,7 +125,7 @@ import Test.HUnit
 -- Two event occurrences are said to be simultaneous iff they are within
 -- the same step. Simultaneous occurrences are ordered within a single
 -- event stream, but not across different event streams.
-newtype Event a = Event (Signal [a])
+newtype Event a = Event { unEvent :: Signal [a] }
   deriving (Functor, Typeable)
 -- | @Discrete a@ is much like @'Signal' a@, but the user can get notified
 -- every time the value may have changed. See 'changesD'.
@@ -143,6 +144,46 @@ newtype Discrete a = Discrete (Signal (Bool, a))
 instance Monoid (Event a) where
   mempty = Event $ pure []
   Event a `mappend` Event b = Event $ (++) <$> a <*> b
+
+
+-- | Event streams form an applicative analogous to that of lists.  @pure a@ creates
+-- an event stream of one @a@ occurence each step.
+
+instance Applicative Event where
+  pure a = Event $ pure [a]
+  Event fs <*> Event aS = Event $ (<*>) <$> fs <*> aS
+
+-- | Event streams also form a monad, again analogous to lists.
+instance Monad Event where
+  return a = Event $ pure [a]
+  (>>=) = bind
+
+bind :: Event a -> (a -> Event b) -> Event b
+bind (Event m) f = Event $ do
+  ms <- m
+  concat <$> mapM (unEvent . f) ms
+
+{- Use Cases
+ - 1.  join :: Event (Event a)
+ -       An Event stream of event streams.  This can occur when
+ -       switching event streams.  If you have
+ -          network :: SignalGen (Event a)
+ -          netE    :: Event (SignalGen (Event a))
+ -       then application of @generatorE@ yields
+ -          generatorE netE :: SignalGen (Event (Event a))
+ -
+ -       after binding with the outermost signalgen, there's currently no
+ -       direct way to handle the nested events.
+ -
+ -       With this Monad instance, @join@'ing nested events is identical
+ -       to the following, defined in terms of @joinEventSignal@.
+ -
+ -       joinEvent :: Event (Event a) -> Event a
+ -       joinEvent e = joinEventSignal $ mconcat <$> eventToSignal e
+ -
+ - The Applicative instance isn't all that useful, except that it's roughly
+ - comparable to an @instance Apply Discrete Event@
+ -}
 
 infixl 4 <@>, <@
 
@@ -169,6 +210,13 @@ externalEvent = do
 -- | Transform an event stream using a time-varying transformation function.
 apply :: Signal (a -> b) -> Event a -> Event b
 apply sig (Event evt) = Event $ map <$> sig <*> evt
+
+-- | Transform a function stream using a time-varying value
+--
+-- like @apply@ with the types flipped
+applyFunction :: Event (a -> b) -> Signal a -> Event b
+applyFunction (Event fSig) sig =
+    Event $ (\fs a -> map ($ a) fs) <$> fSig <*> sig
 
 -- | Filter an event stream.
 filterE :: (a -> Bool) -> Event a -> Event a
