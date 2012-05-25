@@ -88,6 +88,8 @@ module FRP.Euphoria.Event
 , EasyApply (..)
 -- * Switching
 , switchD
+, switchDE
+, switchDS
 , generatorD'
 , SignalSet (..)
 -- * Debugging
@@ -573,6 +575,18 @@ discreteToSignal dis = discreteToSignalNoMemo <$> recordDiscrete dis
 -- same as the thing @dis@ currently contains.
 switchD :: (SignalSet s) => Discrete s -> SignalGen s
 switchD dis = recordDiscrete dis >>= basicSwitchD >>= memoizeSignalSet
+
+-- | @switchDS@ selects current @Signal a@ of a 'Discrete'.
+-- 
+-- See @switchD@ for a more general function.
+switchDS :: Discrete (Signal a) -> SignalGen (Signal a)
+switchDS = switchD
+
+-- | @switchDE@ selects the current 'Event' stream contained in a 'Discrete'
+--
+-- See @switchD@ for a more general function.
+switchDE :: Discrete (Event a) -> SignalGen (Event a)
+switchDE = switchD
 
 -- | @freezeD fixEvent dis@ returns a discrete whose value is same as
 -- @dis@ before @fixEvent@ is activated first. Its value gets fixed once

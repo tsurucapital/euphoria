@@ -1,19 +1,26 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DoRec, ScopedTypeVariables #-}
+{-# LANGUAGE DoRec, ScopedTypeVariables, DeriveFunctor #-}
 
 -- | Collection signals with incremental updates.
 module FRP.Euphoria.Collection
 ( CollectionUpdate (..)
-, Collection
+, Collection (..)
+-- * creating collections
 , simpleCollection
-, watchCollection
 , listToCollection
 , mapToCollection
+-- * observing collections
+, watchCollection
 , followCollectionKey
 , collectionToDiscreteList
+, snapshotCollection
+-- * other functions
+, mapCollection
 ) where
 
+import Control.Arrow ((***))
 import Control.Applicative
+import Control.Monad (join)
 import Data.EnumMap (EnumMap)
 import qualified Data.EnumMap as EnumMap
 import Data.List
@@ -27,6 +34,7 @@ import FRP.Euphoria.Event
 data CollectionUpdate k a
     = AddItem k a
     | RemoveItem k
+    deriving (Functor)
 
 -- | An FRP interface for representing an incrementally updated
 -- collection of items. The items are identified by a unique key.
@@ -51,7 +59,18 @@ data CollectionUpdate k a
 -- Usage of 'Collection' implies there could be some caching/state by
 -- the consumer of the Events, otherwise one might as well use a
 -- Signal [a].
-type Collection k a = Discrete ([(k, a)], Event (CollectionUpdate k a))
+newtype Collection k a = Collection {
+  unCollection :: Discrete ([(k, a)], Event (CollectionUpdate k a))
+  }
+
+instance SignalSet (Collection k a) where
+    basicSwitchD dis = return . Collection $ join (unCollection <$> dis)
+    memoizeSignalSet (Collection dis)= Collection <$> memoD dis
+
+mapCollection :: (a -> b) -> Collection k a -> SignalGen (Collection k b)
+mapCollection f (Collection aC) = do
+     memoC <- memoD $ fmap ( (map . fmap) f *** (fmap . fmap ) f) aC
+     return $ Collection memoC
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
@@ -98,12 +117,12 @@ accumCollection ev = do
         f m = do
             ev' <- dropStepE ev
             return (EnumMap.toList m, ev')
-    generatorD $ f <$> mapping
+    Collection <$> (generatorD $ f <$> mapping)
 
 -- | Prints add/remove diagnostics for a Collection. Useful for debugging
 watchCollection :: (Show k, Show a)
                 => Collection k a -> SignalGen (Event (IO ()))
-watchCollection coll = do
+watchCollection (Collection coll) = do
     ev1 <- takeE 1 =<< preservesD coll
     now <- onCreation ()
     let f (items, ev) = ((putStrLn . showUpdate) <$> ev) `mappend`
@@ -211,7 +230,7 @@ followCollectionKey :: forall k a. (Eq k)
                     => k
                     -> Collection k a
                     -> SignalGen (Discrete (Maybe a))
-followCollectionKey k coll = do
+followCollectionKey k (Collection coll) = do
     collAsNow <- takeE 1 =<< preservesD coll
         :: SignalGen (Event ([(k, a)], Event (CollectionUpdate k a)))
     let existing :: Event (CollectionUpdate k a)
@@ -244,4 +263,9 @@ accumMatchingItem f updateE =
 -- | Extracts a 'Discrete' which represents the current state of
 -- a collection.
 collectionToDiscreteList :: Collection k a -> Discrete [(k, a)]
-collectionToDiscreteList = fmap fst
+collectionToDiscreteList = fmap fst . unCollection
+
+-- | Extracts a snapshot of the current values in a collection with
+-- an 'Event' stream of further updates
+snapshotCollection :: Collection k a -> SignalGen ([(k,a)], Event (CollectionUpdate k a))
+snapshotCollection = snapshotD . unCollection
