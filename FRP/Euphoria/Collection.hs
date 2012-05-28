@@ -1,5 +1,6 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DoRec, ScopedTypeVariables, TupleSections, DeriveFunctor #-}
+{-# LANGUAGE DoRec, ScopedTypeVariables, TupleSections
+            ,DeriveFunctor, DeriveTraversable, DeriveFoldable #-}
 
 -- | Collection signals with incremental updates.
 module FRP.Euphoria.Collection
@@ -16,7 +17,7 @@ module FRP.Euphoria.Collection
 , snapshotCollection
 -- * other functions
 , mapCollection
-, mapCollectionM
+, sequenceCollection
 ) where
 
 import Control.Applicative
@@ -25,6 +26,8 @@ import Data.EnumMap (EnumMap)
 import qualified Data.EnumMap as EnumMap
 import Data.List
 import Data.Maybe (mapMaybe)
+import Data.Traversable
+import Data.Foldable (Foldable)
 import Data.Monoid
 import Test.HUnit
 
@@ -35,7 +38,7 @@ import FRP.Euphoria.Event
 data CollectionUpdate k a
     = AddItem k a
     | RemoveItem k
-    deriving (Functor, Eq, Show)
+    deriving (Functor, Eq, Show, Foldable, Traversable)
 
 -- | An FRP interface for representing an incrementally updated
 -- collection of items. The items are identified by a unique key.
@@ -95,17 +98,19 @@ mapCollection f aC = do
   newUpdateE <- memoE $ (fmap . fmap) f updateE
   makeCollection newCurD newUpdateE
 
-mapCollectionM :: Collection k (SignalGen a) -> SignalGen (Collection k a)
-mapCollectionM aC = do
-    updateE <- snd <$> snapshotCollection aC
-    genE    <- generatorE $ updateF <$> updateE
-    genD    <- generatorD $ fmap ((\pairs -> mapM pairF pairs) . fst)
-                                 $ unCollection aC
-    makeCollection genD genE
-  where
-    updateF (AddItem k aSG) = (AddItem k) <$> aSG
-    updateF (RemoveItem k)  = return $ RemoveItem k
-    pairF   (k,aSG)         = (k,) <$> aSG
+-- | Create an 'Event' stream of all updates from a collection, including
+-- the items currently in it.
+collectionToUpdates :: forall k a. Collection k a -> SignalGen (Event (CollectionUpdate k a))
+collectionToUpdates aC = do
+    (cur,updateE) :: ([(k,a)], Event (CollectionUpdate k a)) <- snapshotCollection aC
+    initE  <- onCreation (map (uncurry AddItem) cur)
+    initE' <- memoE $ flattenE initE
+    return (updateE `mappend` initE')
+
+sequenceCollection :: Enum k => Collection k (SignalGen a) -> SignalGen (Collection k a)
+sequenceCollection col = collectionToUpdates col
+  >>= generatorE . fmap sequenceA
+  >>= accumCollection
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
