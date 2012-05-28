@@ -18,7 +18,6 @@ module FRP.Euphoria.Collection
 , mapCollection
 ) where
 
-import Control.Arrow ((***))
 import Control.Applicative
 import Control.Monad (join)
 import Data.EnumMap (EnumMap)
@@ -88,9 +87,11 @@ instance SignalSet (Collection k a) where
     memoizeSignalSet (Collection dis)= Collection <$> memoD dis
 
 mapCollection :: (a -> b) -> Collection k a -> SignalGen (Collection k b)
-mapCollection f (Collection aC) = do
-     memoC <- memoD $ fmap ( (map . fmap) f *** (fmap . fmap ) f) aC
-     return $ Collection memoC
+mapCollection f aC = do
+  (cur,updateE) <- snapshotCollection aC
+  let cur' = (fmap . fmap) f cur
+  newUpdateE <- memoE $ (fmap . fmap) f updateE
+  return $ Collection $ pure (cur',newUpdateE)
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
