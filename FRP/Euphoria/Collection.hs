@@ -65,13 +65,13 @@ newtype Collection k a = Collection {
   }
 
 instance SignalSet (Collection k a) where
-    basicSwitchD dis = do
-        dis' <- memoD dis
+    basicSwitchD dis0 = do
+        dis <- memoD dis0
         listD <- memoD $ join (fmap fst . unCollection <$> dis)
         listS <- discreteToSignal listD
         prevListS <- delayS [] listS
 
-        chE <- dropStepE $ changesD dis'
+        chE <- dropStepE $ changesD dis
         (_, initialUpdatesE) <- snapshotCollection =<< snapshotD dis
         updatesE <- generatorD' =<< stepperD (return initialUpdatesE)
             (updates <$> prevListS <*> listS <@> chE)
