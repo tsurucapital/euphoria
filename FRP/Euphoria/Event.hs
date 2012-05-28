@@ -21,7 +21,7 @@ module FRP.Euphoria.Event
 -- ** State accumulation
 -- | With these functions, any input event occurrence will affect the output
 -- immediately, without any delays.
-, stepper
+, stepperS
 , accumS
 , accumSIO
 , accumE
@@ -178,10 +178,10 @@ apply sig (Event evt) = Event $ map <$> sig <*> evt
 filterE :: (a -> Bool) -> Event a -> Event a
 filterE cond (Event evt) = Event $ filter cond <$> evt
 
--- | @stepper initial evt@ returns a signal whose value is the last occurrence
+-- | @stepperS initial evt@ returns a signal whose value is the last occurrence
 -- of @evt@, or @initial@ if there has been none.
-stepper :: a -> Event a -> SignalGen (Signal a)
-stepper initial (Event evt) = transfer initial upd evt
+stepperS :: a -> Event a -> SignalGen (Signal a)
+stepperS initial (Event evt) = transfer initial upd evt
   where
     upd [] old = old
     upd occs _ = last occs
@@ -480,7 +480,7 @@ snapshotD :: Discrete a -> SignalGen a
 -- 'snapshot' actually safe?
 snapshotD (Discrete a) = snd <$> snapshotS a
 
--- | Like 'stepper', but creates a 'Discrete'.
+-- | Like 'stepperS', but creates a 'Discrete'.
 stepperD :: a -> Event a -> SignalGen (Discrete a)
 stepperD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
   where
@@ -838,7 +838,7 @@ test_groupE = test $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [3,3,4]]
         evt2 <- groupE evt
         threes <- takeE 1 =<< dropE 2 evt2
-        dyn <- stepper mempty threes
+        dyn <- stepperS mempty threes
         return $ eventToSignal $ joinEventSignal dyn
     result @?= [[], [], [3], [], [3,3]]
 
