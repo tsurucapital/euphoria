@@ -221,18 +221,18 @@ dispatchCollEvent :: (Enum k, Eq k, Eq a)
 dispatchCollEvent mapcollE = do
     let f (MCChange k a) = Just (k, a)
         f _ = Nothing
-    changeEv <- memoE $ filterNothingE (f <$> mapcollE)
+    changeEv <- memoE $ justE (f <$> mapcollE)
     let g (MCNew k a) = Just $
             AddItem k <$> followCollItem a k changeEv
         g (MCRemove k) = Just $ return $ RemoveItem k
         g (MCChange _ _) = Nothing
-    updateEv <- generatorE $ filterNothingE (g <$> mapcollE)
+    updateEv <- generatorE $ justE (g <$> mapcollE)
     accumCollection updateEv
 
 followCollItem :: (Eq k) => a -> k
                -> Event (k, a)
                -> SignalGen (Discrete a)
-followCollItem val k1 ev = stepperD val (filterNothingE (f <$> ev))
+followCollItem val k1 ev = stepperD val (justE (f <$> ev))
   where f (k2, v) | k1 == k2 = Just v
                   | otherwise = Nothing
 
@@ -281,7 +281,7 @@ accumMatchingItem :: forall k a.
                   -> Event (CollectionUpdate k a)
                   -> SignalGen (Discrete (Maybe a))
 accumMatchingItem f updateE =
-    stepperD Nothing $ filterNothingE (g <$> updateE)
+    stepperD Nothing $ justE (g <$> updateE)
   where
     g :: CollectionUpdate k a -> Maybe (Maybe a)
     g (AddItem k a)  | f k       = Just (Just a)

@@ -30,7 +30,7 @@ module FRP.Euphoria.Event
 , scanAccumEM
 -- ** Filtering and other list-like operations
 , filterE
-, filterNothingE
+, justE
 , mapMaybeE
 , flattenE
 , expandE
@@ -263,7 +263,7 @@ scanAccumEM initial ev = (snd <$>) <$> accumEM (initial, undefined) (f <$> ev)
 dropStepE :: Event a -> SignalGen (Event a)
 dropStepE ev = do
     initial <- delayS True (pure False)
-    memoE $ filterNothingE $ discardIf <$> initial <@> ev
+    memoE $ justE $ discardIf <$> initial <@> ev
     where
         discardIf True _ = Nothing
         discardIf False x = Just x
@@ -296,12 +296,12 @@ joinEventSignal sig = Event $ do
   occs
 
 -- | Remove occurrences that are 'Nothing'.
-filterNothingE :: Event (Maybe a) -> Event a
-filterNothingE (Event evt) = Event $ catMaybes <$> evt
+justE :: Event (Maybe a) -> Event a
+justE (Event evt) = Event $ catMaybes <$> evt
 
 -- | Like 'mapMaybe' over events.
 mapMaybeE :: (a -> Maybe b) -> Event a -> Event b
-mapMaybeE f evt = filterNothingE $ f <$> evt
+mapMaybeE f evt = justE $ f <$> evt
 
 -- | @onCreation x@ creates an event that occurs only once,
 -- immediately on creation.
@@ -428,7 +428,7 @@ groupByE eqv sourceEvt = fmap snd <$> groupWithInitialByE eqv sourceEvt
 -- occurrence contains the first occurrence of its inner event.
 groupWithInitialByE :: (a -> a -> Bool) -> Event a -> SignalGen (Event (a, Event a))
 groupWithInitialByE eqv sourceEvt = do
-    networkE <- filterNothingE <$> scanAccumE Nothing (makeNetwork <$> sourceEvt)
+    networkE <- justE <$> scanAccumE Nothing (makeNetwork <$> sourceEvt)
     generatorE networkE
     where
         makeNetwork val currentVal
@@ -506,7 +506,7 @@ accumD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
 
 -- | Filter events to only those which are different than the previous event.
 differentE :: (Eq a) => Event a -> SignalGen (Event a)
-differentE ev = (filterNothingE . (f <$>)) <$> withPrevE Nothing (Just <$> ev)
+differentE ev = (justE . (f <$>)) <$> withPrevE Nothing (Just <$> ev)
   where
     f :: (Eq a) => (Maybe a, Maybe a) -> Maybe a
     f (new, old) = if new /= old then new else old
@@ -633,12 +633,12 @@ keepJustsD :: Discrete (Maybe (Maybe a))
            -> SignalGen (Discrete (Maybe a))
 keepJustsD tm = do
     emm <- preservesD tm
-    stepperD Nothing (filterNothingE emm)
+    stepperD Nothing (justE emm)
 
 keepDJustsD :: Discrete (Maybe (Discrete a))
             -> SignalGen (Discrete (Maybe a))
 keepDJustsD dmd =
-    fmap (fmap Just) . filterNothingE <$> preservesD dmd
+    fmap (fmap Just) . justE <$> preservesD dmd
     >>= stepperD (return Nothing) >>= switchD
 
 -- $app_discrete_maybe
