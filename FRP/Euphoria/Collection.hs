@@ -4,7 +4,7 @@
 -- | Collection signals with incremental updates.
 module FRP.Euphoria.Collection
 ( CollectionUpdate (..)
-, Collection (..)
+, Collection
 -- * creating collections
 , simpleCollection
 , listToCollection
