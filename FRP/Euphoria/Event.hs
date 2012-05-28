@@ -12,7 +12,7 @@ module FRP.Euphoria.Event
   Event
 -- ** Creation
 , externalEvent
-, eachSample
+, eachStep
 , onCreation
 , signalToEvent
 -- ** Sampling
@@ -65,7 +65,7 @@ module FRP.Euphoria.Event
 , stepperMaybeD
 , accumD
 -- ** Conversion into events
-, eachSampleD
+, eachStepD
 , changesD
 , preservesD
 -- ** Other discrete operations
@@ -186,16 +186,16 @@ stepperS initial (Event evt) = transfer initial upd evt
     upd [] old = old
     upd occs _ = last occs
 
--- | @eachSample sig@ is an event that occurs every step, having the same
+-- | @eachStep sig@ is an event that occurs every step, having the same
 -- value as @sig@.
-eachSample :: Signal a -> Event a
-eachSample = Event . fmap (:[])
+eachStep :: Signal a -> Event a
+eachStep = Event . fmap (:[])
 
--- | 'Discrete' version of eachSample.
-eachSampleD :: Discrete a -> SignalGen (Event a)
-eachSampleD d = do
+-- | 'Discrete' version of eachStep.
+eachStepD :: Discrete a -> SignalGen (Event a)
+eachStepD d = do
   sig <- discreteToSignal d
-  return $ eachSample sig
+  return $ eachStep sig
 
 -- | The basic construct to build a stateful signal. @accumS initial evt@
 -- returns a signal whose value is originally @initial@. For each occurrence
