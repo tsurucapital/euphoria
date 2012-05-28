@@ -34,7 +34,7 @@ module FRP.Euphoria.Event
 , mapMaybeE
 , flattenE
 , expandE
-, withPrev
+, withPrevE
 , dropE
 , dropWhileE
 , takeE
@@ -313,13 +313,13 @@ onCreation x = Event <$> delayS [x] (return [])
 delayE :: Event a -> SignalGen (Event a)
 delayE (Event x) = Event <$> delayS [] x
 
--- | @withPrev initial evt@ is an Event which occurs every time
+-- | @withPrevE initial evt@ is an Event which occurs every time
 -- @evt@ occurs. Each occurrence carries a pair, whose first element
 -- is the value of the current occurrence of @evt@, and whose second
 -- element is the value of the previous occurrence of @evt@, or
 -- @initial@ if there has been none.
-withPrev :: a -> Event a -> SignalGen (Event (a, a))
-withPrev initial evt = accumE (initial, undefined) $ toUpd <$> evt
+withPrevE :: a -> Event a -> SignalGen (Event (a, a))
+withPrevE initial evt = accumE (initial, undefined) $ toUpd <$> evt
   where
     toUpd val (new, _old) = (val, new)
 
@@ -506,7 +506,7 @@ accumD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
 
 -- | Filter events to only those which are different than the previous event.
 differentE :: (Eq a) => Event a -> SignalGen (Event a)
-differentE ev = (filterNothingE . (f <$>)) <$> withPrev Nothing (Just <$> ev)
+differentE ev = (filterNothingE . (f <$>)) <$> withPrevE Nothing (Just <$> ev)
   where
     f :: (Eq a) => (Maybe a, Maybe a) -> Maybe a
     f (new, old) = if new /= old then new else old
