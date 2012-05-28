@@ -1,5 +1,5 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DoRec, ScopedTypeVariables, DeriveFunctor #-}
+{-# LANGUAGE DoRec, ScopedTypeVariables, TupleSections, DeriveFunctor #-}
 
 -- | Collection signals with incremental updates.
 module FRP.Euphoria.Collection
@@ -17,6 +17,7 @@ module FRP.Euphoria.Collection
 , snapshotCollection
 -- * other functions
 , mapCollection
+, mapCollectionM
 ) where
 
 import Control.Applicative
@@ -94,6 +95,18 @@ mapCollection f aC = do
   newCurD    <- memoD $ fmap ((fmap . fmap) f . fst) $ unCollection aC
   newUpdateE <- memoE $ (fmap . fmap) f updateE
   openCollection newCurD newUpdateE
+
+mapCollectionM :: Collection k (SignalGen a) -> SignalGen (Collection k a)
+mapCollectionM aC = do
+    updateE <- snd <$> snapshotCollection aC
+    genE    <- generatorE $ updateF <$> updateE
+    genD    <- generatorD $ fmap ((\pairs -> mapM pairF pairs) . fst)
+                                 $ unCollection aC
+    makeCollection genD genE
+  where
+    updateF (AddItem k aSG) = (AddItem k) <$> aSG
+    updateF (RemoveItem k)  = return $ RemoveItem k
+    pairF   (k,aSG)         = (k,) <$> aSG
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
