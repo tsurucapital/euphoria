@@ -9,6 +9,7 @@ module FRP.Euphoria.Collection
 , simpleCollection
 , listToCollection
 , mapToCollection
+, openCollection
 -- * observing collections
 , watchCollection
 , followCollectionKey
@@ -75,7 +76,7 @@ instance SignalSet (Collection k a) where
         updatesE <- generatorD' =<< stepperD (return initialUpdatesE)
             (updates <$> prevListS <*> listS <@> chE)
 
-        makeCollection listD updatesE
+        openCollection listD updatesE
         where
             updates prevList list (Collection newCol) = do
                 rebuild <- flattenE <$> onCreation (map remove prevList ++ map add list)
@@ -92,7 +93,7 @@ mapCollection f aC = do
   updateE <- snd <$> snapshotCollection aC
   newCurD    <- memoD $ fmap ((fmap . fmap) f . fst) $ unCollection aC
   newUpdateE <- memoE $ (fmap . fmap) f updateE
-  makeCollection newCurD newUpdateE
+  openCollection newCurD newUpdateE
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
@@ -136,13 +137,18 @@ accumCollection ev = do
         toMapOp (RemoveItem k) = EnumMap.delete k
     mapping <- accumD EnumMap.empty (toMapOp <$> ev)
     listD <- memoD $ EnumMap.toList <$> mapping
-    makeCollection listD ev
+    openCollection listD ev
 
-makeCollection
+-- | The primitive interface for creating a 'Collection'. The two
+-- arguments must be coherent, i.e. the value of the discrete at
+-- time /t+1/ should be obtained by applying the updates
+-- at /t+1/ to the value of the discrete at /t/. This invariant
+-- is not checked.
+openCollection
     :: Discrete [(k, a)]
     -> Event (CollectionUpdate k a)
     -> SignalGen (Collection k a)
-makeCollection listD updE = Collection <$> generatorD (gen <$> listD)
+openCollection listD updE = Collection <$> generatorD (gen <$> listD)
     where
         gen list = do
             updE' <- dropStepE updE
