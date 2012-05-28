@@ -86,12 +86,13 @@ instance SignalSet (Collection k a) where
 
     memoizeSignalSet (Collection dis)= Collection <$> memoD dis
 
+-- | Like 'fmap', but the Collection and interior 'Event' stream are memoized
 mapCollection :: (a -> b) -> Collection k a -> SignalGen (Collection k b)
 mapCollection f aC = do
-  (cur,updateE) <- snapshotCollection aC
-  let cur' = (fmap . fmap) f cur
+  updateE <- snd <$> snapshotCollection aC
+  newCurD    <- memoD $ fmap ((fmap . fmap) f . fst) $ unCollection aC
   newUpdateE <- memoE $ (fmap . fmap) f updateE
-  Collection <$> (memoD $ pure (cur',newUpdateE))
+  makeCollection newCurD newUpdateE
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
