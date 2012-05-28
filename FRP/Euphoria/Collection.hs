@@ -91,7 +91,7 @@ mapCollection f aC = do
   (cur,updateE) <- snapshotCollection aC
   let cur' = (fmap . fmap) f cur
   newUpdateE <- memoE $ (fmap . fmap) f updateE
-  return $ Collection $ pure (cur',newUpdateE)
+  Collection <$> (memoD $ pure (cur',newUpdateE))
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
