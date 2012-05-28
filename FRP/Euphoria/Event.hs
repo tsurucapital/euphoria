@@ -22,8 +22,8 @@ module FRP.Euphoria.Event
 -- | With these functions, any input event occurrence will affect the output
 -- immediately, without any delays.
 , stepper
-, accumB
-, accumBIO
+, accumS
+, accumSIO
 , accumE
 , accumEM
 , scanAccumE
@@ -197,7 +197,7 @@ eachSampleD d = do
   sig <- discreteToSignal d
   return $ eachSample sig
 
--- | The basic construct to build a stateful signal. @accumB initial evt@
+-- | The basic construct to build a stateful signal. @accumS initial evt@
 -- returns a signal whose value is originally @initial@. For each occurrence
 -- of @evt@ the value of the signal gets updated using the function.
 --
@@ -207,21 +207,21 @@ eachSampleD d = do
 --   we can make a signal that remembers the sum of the numbers seen
 --   so far, as follows:
 --
--- > accumB 0 $ (+) <$> nums
-accumB :: a -> Event (a -> a) -> SignalGen (Signal a)
-accumB initial (Event evt) = transfer initial upd evt
+-- > accumS 0 $ (+) <$> nums
+accumS :: a -> Event (a -> a) -> SignalGen (Signal a)
+accumS initial (Event evt) = transfer initial upd evt
   where
     upd occs old = foldl' (flip ($)) old occs
 
--- | @accumB@ with side-effecting updates.
-accumBIO :: a -> Event (a -> IO a) -> SignalGen (Signal a)
-accumBIO initial (Event evt) = mfix $ \self -> do
+-- | @accumS@ with side-effecting updates.
+accumSIO :: a -> Event (a -> IO a) -> SignalGen (Signal a)
+accumSIO initial (Event evt) = mfix $ \self -> do
   prev <- delayS initial self
   effectful1 id $ update <$> prev <*> evt
   where
     update prev upds = foldl' (>>=) (return prev) upds
 
--- | @accumE initial evt@ maintains an internal state just like @accumB@.
+-- | @accumE initial evt@ maintains an internal state just like @accumS@.
 -- It returns an event which occurs every time an update happens.
 -- The resulting event, once created, will have the same number of
 -- occurrences as @evt@ each step.
@@ -496,7 +496,7 @@ stepperDefD = stepperD def
 stepperMaybeD :: Event a -> SignalGen (Discrete (Maybe a))
 stepperMaybeD ev = stepperDefD (Just <$> ev)
 
--- | Like @accumB@, but creates a 'Discrete'.
+-- | Like @accumS@, but creates a 'Discrete'.
 accumD :: a -> Event (a -> a) -> SignalGen (Discrete a)
 accumD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
   where
@@ -821,7 +821,7 @@ test_takeE = test $ do
     result <- networkToList 5 $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [4]]
         evt2 <- takeE 3 evt
-        accumB 0 $ (+) <$> evt2
+        accumS 0 $ (+) <$> evt2
     result @?= [1, 2, 4, 4, 4]
 
 test_takeWhileE :: Test
@@ -829,7 +829,7 @@ test_takeWhileE = test $ do
     result <- networkToList 5 $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [4]]
         evt2 <- takeWhileE (<3) evt
-        accumB 0 $ (+) <$> evt2
+        accumS 0 $ (+) <$> evt2
     result @?= [1, 2, 4, 4, 4]
 
 test_groupE :: Test
