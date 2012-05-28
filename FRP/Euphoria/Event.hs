@@ -169,6 +169,8 @@ externalEvent = do
   return (Event . fmap reverse <$> gen, trigger)
 
 -- | Transform an event stream using a time-varying transformation function.
+--
+-- There is also an infix form '<@>'.
 apply :: Signal (a -> b) -> Event a -> Event b
 apply sig (Event evt) = Event $ map <$> sig <*> evt
 
