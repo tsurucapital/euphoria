@@ -79,7 +79,6 @@ module FRP.Euphoria.Event
 , signalToDiscrete
 , keepJustsD
 , keepDJustsD
-, sampleD
 -- * Signals
 , module FRP.Euphoria.Signal
 -- * Application operators
@@ -160,19 +159,6 @@ instance Apply Signal Event where
 
 -- It's difficult to implement this without causing needless recalculation:
 --instance Apply Discrete Event where
-
--- | Sample the value of a Discrete when @trigger@ occurs.
-sampleD :: (Eq a) => Discrete a -> Event () -> SignalGen (Event a)
-sampleD dis trigger = do
-  shareDis <- minimizeChanges dis
-  return $ unsafeApplyD (const <$> shareDis) trigger
-
--- | Apply an Event to a Discrete function.  To avoid recomputation,
--- the discrete should be downstream from @minimizeChanges@.
-unsafeApplyD :: Discrete (a -> b) -> Event a -> Event b
-unsafeApplyD (Discrete dis) (Event ap) = Event $ do
-  args <- ap
-  (\(_,f) -> map f args) <$> dis
 
 -- | Create an event that can be triggered as an IO action.
 externalEvent :: IO (SignalGen (Event a), a -> IO ())
