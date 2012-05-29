@@ -105,7 +105,7 @@ collectionToUpdates
     :: forall k a. Collection k a
     -> SignalGen (Event (CollectionUpdate k a))
 collectionToUpdates aC = do
-    (cur,updateE) <- snapshotCollection aC
+    (cur,updateE) <- openCollection aC
     initE  <- onCreation (map (uncurry AddItem) cur)
     initE' <- memoE $ flattenE initE
     return (updateE `mappend` initE')
