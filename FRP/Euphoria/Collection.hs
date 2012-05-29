@@ -100,14 +100,19 @@ mapCollection f aC = do
 
 -- | Create an 'Event' stream of all updates from a collection, including
 -- the items currently in it.
-collectionToUpdates :: forall k a. Collection k a -> SignalGen (Event (CollectionUpdate k a))
+collectionToUpdates
+    :: forall k a. Collection k a
+    -> SignalGen (Event (CollectionUpdate k a))
 collectionToUpdates aC = do
-    (cur,updateE) :: ([(k,a)], Event (CollectionUpdate k a)) <- snapshotCollection aC
+    (cur,updateE) <- snapshotCollection aC
     initE  <- onCreation (map (uncurry AddItem) cur)
     initE' <- memoE $ flattenE initE
     return (updateE `mappend` initE')
 
-sequenceCollection :: Enum k => Collection k (SignalGen a) -> SignalGen (Collection k a)
+sequenceCollection
+    :: Enum k
+    => Collection k (SignalGen a)
+    -> SignalGen (Collection k a)
 sequenceCollection col = collectionToUpdates col
   >>= generatorE . fmap sequenceA
   >>= accumCollection
