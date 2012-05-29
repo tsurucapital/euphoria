@@ -1,24 +1,36 @@
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DoRec, ScopedTypeVariables #-}
+{-# LANGUAGE DoRec, ScopedTypeVariables, TupleSections
+            ,DeriveFunctor, DeriveTraversable, DeriveFoldable #-}
 
 -- | Collection signals with incremental updates.
 module FRP.Euphoria.Collection
 ( CollectionUpdate (..)
 , Collection
+-- * creating collections
 , simpleCollection
-, watchCollection
 , listToCollection
 , mapToCollection
+, makeCollection
+-- * observing collections
+, watchCollection
 , followCollectionKey
 , collectionToDiscreteList
+, openCollection
+-- * other functions
+, mapCollection
+, sequenceCollection
 ) where
 
 import Control.Applicative
+import Control.Monad (join)
 import Data.EnumMap (EnumMap)
 import qualified Data.EnumMap as EnumMap
 import Data.List
 import Data.Maybe (mapMaybe)
+import Data.Traversable
+import Data.Foldable (Foldable)
 import Data.Monoid
+import Test.HUnit
 
 import FRP.Euphoria.Event
 
@@ -27,6 +39,7 @@ import FRP.Euphoria.Event
 data CollectionUpdate k a
     = AddItem k a
     | RemoveItem k
+    deriving (Functor, Eq, Show, Foldable, Traversable)
 
 -- | An FRP interface for representing an incrementally updated
 -- collection of items. The items are identified by a unique key.
@@ -51,7 +64,59 @@ data CollectionUpdate k a
 -- Usage of 'Collection' implies there could be some caching/state by
 -- the consumer of the Events, otherwise one might as well use a
 -- Signal [a].
-type Collection k a = Discrete ([(k, a)], Event (CollectionUpdate k a))
+newtype Collection k a = Collection {
+  unCollection :: Discrete ([(k, a)], Event (CollectionUpdate k a))
+  }
+
+instance SignalSet (Collection k a) where
+    basicSwitchD dis0 = do
+        dis <- memoD dis0
+        listD <- memoD $ join (fmap fst . unCollection <$> dis)
+        listS <- discreteToSignal listD
+        prevListS <- delayS [] listS
+
+        chE <- dropStepE $ changesD dis
+        (_, initialUpdatesE) <- openCollection =<< snapshotD dis
+        updatesE <- generatorD' =<< stepperD (return initialUpdatesE)
+            (updates <$> prevListS <*> listS <@> chE)
+
+        makeCollection listD updatesE
+        where
+            updates prevList list (Collection newCol) = do
+                rebuild <- flattenE <$> onCreation (map remove prevList ++ map add list)
+                (_, newUpdates) <- snapshotD newCol
+                memoE $ rebuild `mappend` newUpdates
+            remove (k, _) = RemoveItem k
+            add (k, v) = AddItem k v
+
+    memoizeSignalSet (Collection dis)= Collection <$> memoD dis
+
+-- | Like 'fmap', but the Collection and interior 'Event' stream are memoized
+mapCollection :: (a -> b) -> Collection k a -> SignalGen (Collection k b)
+mapCollection f aC = do
+  updateE <- snd <$> openCollection aC
+  newCurD    <- memoD $ fmap ((fmap . fmap) f . fst) $ unCollection aC
+  newUpdateE <- memoE $ (fmap . fmap) f updateE
+  makeCollection newCurD newUpdateE
+
+-- | Create an 'Event' stream of all updates from a collection, including
+-- the items currently in it.
+collectionToUpdates
+    :: forall k a. Collection k a
+    -> SignalGen (Event (CollectionUpdate k a))
+collectionToUpdates aC = do
+    (cur,updateE) <- openCollection aC
+    initE  <- onCreation (map (uncurry AddItem) cur)
+    initE' <- memoE $ flattenE initE
+    return (updateE `mappend` initE')
+
+sequenceCollection
+    :: Enum k
+    => Collection k (SignalGen a)
+    -> SignalGen (Collection k a)
+sequenceCollection col = collectionToUpdates col
+  >>= generatorE . fmap sequenceA
+  >>= accumCollection
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
@@ -94,16 +159,28 @@ accumCollection ev = do
     let toMapOp (AddItem k a) = EnumMap.insert k a
         toMapOp (RemoveItem k) = EnumMap.delete k
     mapping <- accumD EnumMap.empty (toMapOp <$> ev)
-    let -- f :: (Enum k) => EnumMap k a -> SGen ([(k, a)], Event (CollectionUpdate k a))
-        f m = do
-            ev' <- dropStepE ev
-            return (EnumMap.toList m, ev')
-    generatorD $ f <$> mapping
+    listD <- memoD $ EnumMap.toList <$> mapping
+    makeCollection listD ev
+
+-- | The primitive interface for creating a 'Collection'. The two
+-- arguments must be coherent, i.e. the value of the discrete at
+-- time /t+1/ should be obtained by applying the updates
+-- at /t+1/ to the value of the discrete at /t/. This invariant
+-- is not checked.
+makeCollection
+    :: Discrete [(k, a)]
+    -> Event (CollectionUpdate k a)
+    -> SignalGen (Collection k a)
+makeCollection listD updE = Collection <$> generatorD (gen <$> listD)
+    where
+        gen list = do
+            updE' <- dropStepE updE
+            return (list, updE')
 
 -- | Prints add/remove diagnostics for a Collection. Useful for debugging
 watchCollection :: (Show k, Show a)
                 => Collection k a -> SignalGen (Event (IO ()))
-watchCollection coll = do
+watchCollection (Collection coll) = do
     ev1 <- takeE 1 =<< preservesD coll
     now <- onCreation ()
     let f (items, ev) = ((putStrLn . showUpdate) <$> ev) `mappend`
@@ -173,18 +250,18 @@ dispatchCollEvent :: (Enum k, Eq k, Eq a)
 dispatchCollEvent mapcollE = do
     let f (MCChange k a) = Just (k, a)
         f _ = Nothing
-    changeEv <- memoE $ filterNothingE (f <$> mapcollE)
+    changeEv <- memoE $ justE (f <$> mapcollE)
     let g (MCNew k a) = Just $
             AddItem k <$> followCollItem a k changeEv
         g (MCRemove k) = Just $ return $ RemoveItem k
         g (MCChange _ _) = Nothing
-    updateEv <- generatorE $ filterNothingE (g <$> mapcollE)
+    updateEv <- generatorE $ justE (g <$> mapcollE)
     accumCollection updateEv
 
 followCollItem :: (Eq k) => a -> k
                -> Event (k, a)
                -> SignalGen (Discrete a)
-followCollItem val k1 ev = stepperD val (filterNothingE (f <$> ev))
+followCollItem val k1 ev = stepperD val (justE (f <$> ev))
   where f (k2, v) | k1 == k2 = Just v
                   | otherwise = Nothing
 
@@ -211,7 +288,7 @@ followCollectionKey :: forall k a. (Eq k)
                     => k
                     -> Collection k a
                     -> SignalGen (Discrete (Maybe a))
-followCollectionKey k coll = do
+followCollectionKey k (Collection coll) = do
     collAsNow <- takeE 1 =<< preservesD coll
         :: SignalGen (Event ([(k, a)], Event (CollectionUpdate k a)))
     let existing :: Event (CollectionUpdate k a)
@@ -233,7 +310,7 @@ accumMatchingItem :: forall k a.
                   -> Event (CollectionUpdate k a)
                   -> SignalGen (Discrete (Maybe a))
 accumMatchingItem f updateE =
-    stepperD Nothing $ filterNothingE (g <$> updateE)
+    stepperD Nothing $ justE (g <$> updateE)
   where
     g :: CollectionUpdate k a -> Maybe (Maybe a)
     g (AddItem k a)  | f k       = Just (Just a)
@@ -244,4 +321,43 @@ accumMatchingItem f updateE =
 -- | Extracts a 'Discrete' which represents the current state of
 -- a collection.
 collectionToDiscreteList :: Collection k a -> Discrete [(k, a)]
-collectionToDiscreteList = fmap fst
+collectionToDiscreteList = fmap fst . unCollection
+
+-- | Extracts a snapshot of the current values in a collection with
+-- an 'Event' stream of further updates
+openCollection :: Collection k a -> SignalGen ([(k,a)], Event (CollectionUpdate k a))
+openCollection = snapshotD . unCollection
+
+--------------------------------------------------------------------------------
+-- Unit tests
+
+test_switchCollection :: Test
+test_switchCollection = test $ do
+    result <- networkToList 5 $ do
+        col0 <- listToCollection (0::Int) =<< mkD [[10::Int], [], [10,20,30], [20,30], [30]]
+        col1 <- listToCollection 0 =<< mkD [[11], [], [11,21,31], [21,31], [31]]
+        col2 <- listToCollection 0 =<< mkD [[12], [], [12,22,32], [22,32], [32]]
+        colD <- stepperD col0 =<< eventFromList [[], [], [col1], [], [col2]]
+        col <- switchD colD
+        (_, updates) <- openCollection col
+        listS <- discreteToSignal $ collectionToDiscreteList col
+        return $ (,) <$> listS <*> (eventToSignal updates)
+    result @?=
+        [ ([(0, 10)]
+            , [])
+        , ([]
+            , [RemoveItem 0])
+        , ([(1, 11), (2, 21), (3, 31)]
+            , [AddItem 1 11, AddItem 2 21, AddItem 3 31])
+        , ([(2, 21), (3, 31)]
+            , [RemoveItem 1])
+        , ([(3, 32)]
+            , [RemoveItem 2, RemoveItem 3, AddItem 3 32])
+        ]
+    where
+        mkD list = signalToDiscrete <$> signalFromList list
+
+_unitTest :: IO Counts
+_unitTest = runTestTT $ test
+    [ test_switchCollection
+    ]

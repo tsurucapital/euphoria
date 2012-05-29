@@ -12,7 +12,7 @@ module FRP.Euphoria.Event
   Event
 -- ** Creation
 , externalEvent
-, eachSample
+, eachStep
 , onCreation
 , signalToEvent
 -- ** Sampling
@@ -21,20 +21,20 @@ module FRP.Euphoria.Event
 -- ** State accumulation
 -- | With these functions, any input event occurrence will affect the output
 -- immediately, without any delays.
-, stepper
-, accumB
-, accumBIO
+, stepperS
+, accumS
+, accumSIO
 , accumE
 , accumEM
 , scanAccumE
 , scanAccumEM
 -- ** Filtering and other list-like operations
 , filterE
-, filterNothingE
+, justE
 , mapMaybeE
 , flattenE
 , expandE
-, withPrev
+, withPrevE
 , dropE
 , dropWhileE
 , takeE
@@ -50,7 +50,7 @@ module FRP.Euphoria.Event
 -- ** Other event operations
 , delayE
 , dropStepE
-, effectfulEE
+, mapEIO
 , memoE
 , joinEventSignal
 , generatorE
@@ -65,7 +65,7 @@ module FRP.Euphoria.Event
 , stepperMaybeD
 , accumD
 -- ** Conversion into events
-, eachSampleD
+, eachStepD
 , changesD
 , preservesD
 -- ** Other discrete operations
@@ -88,6 +88,8 @@ module FRP.Euphoria.Event
 , EasyApply (..)
 -- * Switching
 , switchD
+, switchDE
+, switchDS
 , generatorD'
 , SignalSet (..)
 -- * Debugging
@@ -167,6 +169,8 @@ externalEvent = do
   return (Event . fmap reverse <$> gen, trigger)
 
 -- | Transform an event stream using a time-varying transformation function.
+--
+-- There is also an infix form '<@>'.
 apply :: Signal (a -> b) -> Event a -> Event b
 apply sig (Event evt) = Event $ map <$> sig <*> evt
 
@@ -174,26 +178,26 @@ apply sig (Event evt) = Event $ map <$> sig <*> evt
 filterE :: (a -> Bool) -> Event a -> Event a
 filterE cond (Event evt) = Event $ filter cond <$> evt
 
--- | @stepper initial evt@ returns a signal whose value is the last occurrence
+-- | @stepperS initial evt@ returns a signal whose value is the last occurrence
 -- of @evt@, or @initial@ if there has been none.
-stepper :: a -> Event a -> SignalGen (Signal a)
-stepper initial (Event evt) = transfer initial upd evt
+stepperS :: a -> Event a -> SignalGen (Signal a)
+stepperS initial (Event evt) = transfer initial upd evt
   where
     upd [] old = old
     upd occs _ = last occs
 
--- | @eachSample sig@ is an event that occurs every step, having the same
+-- | @eachStep sig@ is an event that occurs every step, having the same
 -- value as @sig@.
-eachSample :: Signal a -> Event a
-eachSample = Event . fmap (:[])
+eachStep :: Signal a -> Event a
+eachStep = Event . fmap (:[])
 
--- | 'Discrete' version of eachSample.
-eachSampleD :: Discrete a -> SignalGen (Event a)
-eachSampleD d = do
+-- | 'Discrete' version of eachStep.
+eachStepD :: Discrete a -> SignalGen (Event a)
+eachStepD d = do
   sig <- discreteToSignal d
-  return $ eachSample sig
+  return $ eachStep sig
 
--- | The basic construct to build a stateful signal. @accumB initial evt@
+-- | The basic construct to build a stateful signal. @accumS initial evt@
 -- returns a signal whose value is originally @initial@. For each occurrence
 -- of @evt@ the value of the signal gets updated using the function.
 --
@@ -203,21 +207,21 @@ eachSampleD d = do
 --   we can make a signal that remembers the sum of the numbers seen
 --   so far, as follows:
 --
--- > accumB 0 $ (+) <$> nums
-accumB :: a -> Event (a -> a) -> SignalGen (Signal a)
-accumB initial (Event evt) = transfer initial upd evt
+-- > accumS 0 $ (+) <$> nums
+accumS :: a -> Event (a -> a) -> SignalGen (Signal a)
+accumS initial (Event evt) = transfer initial upd evt
   where
     upd occs old = foldl' (flip ($)) old occs
 
--- | @accumB@ with side-effecting updates.
-accumBIO :: a -> Event (a -> IO a) -> SignalGen (Signal a)
-accumBIO initial (Event evt) = mfix $ \self -> do
+-- | @accumS@ with side-effecting updates.
+accumSIO :: a -> Event (a -> IO a) -> SignalGen (Signal a)
+accumSIO initial (Event evt) = mfix $ \self -> do
   prev <- delayS initial self
   effectful1 id $ update <$> prev <*> evt
   where
     update prev upds = foldl' (>>=) (return prev) upds
 
--- | @accumE initial evt@ maintains an internal state just like @accumB@.
+-- | @accumE initial evt@ maintains an internal state just like @accumS@.
 -- It returns an event which occurs every time an update happens.
 -- The resulting event, once created, will have the same number of
 -- occurrences as @evt@ each step.
@@ -259,7 +263,7 @@ scanAccumEM initial ev = (snd <$>) <$> accumEM (initial, undefined) (f <$> ev)
 dropStepE :: Event a -> SignalGen (Event a)
 dropStepE ev = do
     initial <- delayS True (pure False)
-    memoE $ filterNothingE $ discardIf <$> initial <@> ev
+    memoE $ justE $ discardIf <$> initial <@> ev
     where
         discardIf True _ = Nothing
         discardIf False x = Just x
@@ -277,8 +281,8 @@ expandE (Event evt) = Event $ f <$> evt
         f xs = [xs]
 
 -- | Like 'mapM' over events.
-effectfulEE :: (t -> IO a) -> Event t -> SignalGen (Event a)
-effectfulEE mkAction (Event evt) = Event <$> effectful1 (mapM mkAction) evt
+mapEIO :: (t -> IO a) -> Event t -> SignalGen (Event a)
+mapEIO mkAction (Event evt) = Event <$> effectful1 (mapM mkAction) evt
 
 -- | Memoization of events. See the doc for 'FRP.Elerea.Simple.memo'.
 memoE :: Event a -> SignalGen (Event a)
@@ -292,12 +296,12 @@ joinEventSignal sig = Event $ do
   occs
 
 -- | Remove occurrences that are 'Nothing'.
-filterNothingE :: Event (Maybe a) -> Event a
-filterNothingE (Event evt) = Event $ catMaybes <$> evt
+justE :: Event (Maybe a) -> Event a
+justE (Event evt) = Event $ catMaybes <$> evt
 
 -- | Like 'mapMaybe' over events.
 mapMaybeE :: (a -> Maybe b) -> Event a -> Event b
-mapMaybeE f evt = filterNothingE $ f <$> evt
+mapMaybeE f evt = justE $ f <$> evt
 
 -- | @onCreation x@ creates an event that occurs only once,
 -- immediately on creation.
@@ -309,13 +313,13 @@ onCreation x = Event <$> delayS [x] (return [])
 delayE :: Event a -> SignalGen (Event a)
 delayE (Event x) = Event <$> delayS [] x
 
--- | @withPrev initial evt@ is an Event which occurs every time
+-- | @withPrevE initial evt@ is an Event which occurs every time
 -- @evt@ occurs. Each occurrence carries a pair, whose first element
 -- is the value of the current occurrence of @evt@, and whose second
 -- element is the value of the previous occurrence of @evt@, or
 -- @initial@ if there has been none.
-withPrev :: a -> Event a -> SignalGen (Event (a, a))
-withPrev initial evt = accumE (initial, undefined) $ toUpd <$> evt
+withPrevE :: a -> Event a -> SignalGen (Event (a, a))
+withPrevE initial evt = accumE (initial, undefined) $ toUpd <$> evt
   where
     toUpd val (new, _old) = (val, new)
 
@@ -424,7 +428,7 @@ groupByE eqv sourceEvt = fmap snd <$> groupWithInitialByE eqv sourceEvt
 -- occurrence contains the first occurrence of its inner event.
 groupWithInitialByE :: (a -> a -> Bool) -> Event a -> SignalGen (Event (a, Event a))
 groupWithInitialByE eqv sourceEvt = do
-    networkE <- filterNothingE <$> scanAccumE Nothing (makeNetwork <$> sourceEvt)
+    networkE <- justE <$> scanAccumE Nothing (makeNetwork <$> sourceEvt)
     generatorE networkE
     where
         makeNetwork val currentVal
@@ -476,7 +480,7 @@ snapshotD :: Discrete a -> SignalGen a
 -- 'snapshot' actually safe?
 snapshotD (Discrete a) = snd <$> snapshotS a
 
--- | Like 'stepper', but creates a 'Discrete'.
+-- | Like 'stepperS', but creates a 'Discrete'.
 stepperD :: a -> Event a -> SignalGen (Discrete a)
 stepperD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
   where
@@ -492,7 +496,7 @@ stepperDefD = stepperD def
 stepperMaybeD :: Event a -> SignalGen (Discrete (Maybe a))
 stepperMaybeD ev = stepperDefD (Just <$> ev)
 
--- | Like @accumB@, but creates a 'Discrete'.
+-- | Like @accumS@, but creates a 'Discrete'.
 accumD :: a -> Event (a -> a) -> SignalGen (Discrete a)
 accumD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
   where
@@ -502,7 +506,7 @@ accumD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
 
 -- | Filter events to only those which are different than the previous event.
 differentE :: (Eq a) => Event a -> SignalGen (Event a)
-differentE ev = (filterNothingE . (f <$>)) <$> withPrev Nothing (Just <$> ev)
+differentE ev = (justE . (f <$>)) <$> withPrevE Nothing (Just <$> ev)
   where
     f :: (Eq a) => (Maybe a, Maybe a) -> Maybe a
     f (new, old) = if new /= old then new else old
@@ -574,6 +578,18 @@ discreteToSignal dis = discreteToSignalNoMemo <$> recordDiscrete dis
 switchD :: (SignalSet s) => Discrete s -> SignalGen s
 switchD dis = recordDiscrete dis >>= basicSwitchD >>= memoizeSignalSet
 
+-- | @switchDS@ selects current @Signal a@ of a 'Discrete'.
+-- 
+-- See @switchD@ for a more general function.
+switchDS :: Discrete (Signal a) -> SignalGen (Signal a)
+switchDS = switchD
+
+-- | @switchDE@ selects the current 'Event' stream contained in a 'Discrete'
+--
+-- See @switchD@ for a more general function.
+switchDE :: Discrete (Event a) -> SignalGen (Event a)
+switchDE = switchD
+
 -- | @freezeD fixEvent dis@ returns a discrete whose value is same as
 -- @dis@ before @fixEvent@ is activated first. Its value gets fixed once
 -- an occurrence of @fixEvent@ is seen.
@@ -617,12 +633,12 @@ keepJustsD :: Discrete (Maybe (Maybe a))
            -> SignalGen (Discrete (Maybe a))
 keepJustsD tm = do
     emm <- preservesD tm
-    stepperD Nothing (filterNothingE emm)
+    stepperD Nothing (justE emm)
 
 keepDJustsD :: Discrete (Maybe (Discrete a))
             -> SignalGen (Discrete (Maybe a))
 keepDJustsD dmd =
-    fmap (fmap Just) . filterNothingE <$> preservesD dmd
+    fmap (fmap Just) . justE <$> preservesD dmd
     >>= stepperD (return Nothing) >>= switchD
 
 -- $app_discrete_maybe
@@ -805,7 +821,7 @@ test_takeE = test $ do
     result <- networkToList 5 $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [4]]
         evt2 <- takeE 3 evt
-        accumB 0 $ (+) <$> evt2
+        accumS 0 $ (+) <$> evt2
     result @?= [1, 2, 4, 4, 4]
 
 test_takeWhileE :: Test
@@ -813,7 +829,7 @@ test_takeWhileE = test $ do
     result <- networkToList 5 $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [4]]
         evt2 <- takeWhileE (<3) evt
-        accumB 0 $ (+) <$> evt2
+        accumS 0 $ (+) <$> evt2
     result @?= [1, 2, 4, 4, 4]
 
 test_groupE :: Test
@@ -822,7 +838,7 @@ test_groupE = test $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [3,3,4]]
         evt2 <- groupE evt
         threes <- takeE 1 =<< dropE 2 evt2
-        dyn <- stepper mempty threes
+        dyn <- stepperS mempty threes
         return $ eventToSignal $ joinEventSignal dyn
     result @?= [[], [], [3], [], [3,3]]
 

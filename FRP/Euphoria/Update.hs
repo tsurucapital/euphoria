@@ -108,7 +108,7 @@ mappendUpdateIO d1 d2 = unIOMonoid <$> ((IOMonoid <$> d1) `mappend` (IOMonoid <$
 instance (Monoid a) => SignalSet (Update a) where
     basicSwitchD dis = do
         updatesE <- preservesD dis
-        dynUpdatesE <- effectfulEE mkDynUpdates updatesE
+        dynUpdatesE <- mapEIO mkDynUpdates updatesE
         dynUpdatesD <- stepperD undefined dynUpdatesE
         dynE <- switchD dynUpdatesD
         initial <- execute newDynUpdateState
