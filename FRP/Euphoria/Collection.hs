@@ -9,12 +9,12 @@ module FRP.Euphoria.Collection
 , simpleCollection
 , listToCollection
 , mapToCollection
-, openCollection
+, makeCollection
 -- * observing collections
 , watchCollection
 , followCollectionKey
 , collectionToDiscreteList
-, snapshotCollection
+, openCollection
 -- * other functions
 , mapCollection
 ) where
@@ -72,11 +72,11 @@ instance SignalSet (Collection k a) where
         prevListS <- delayS [] listS
 
         chE <- dropStepE $ changesD dis
-        (_, initialUpdatesE) <- snapshotCollection =<< snapshotD dis
+        (_, initialUpdatesE) <- openCollection =<< snapshotD dis
         updatesE <- generatorD' =<< stepperD (return initialUpdatesE)
             (updates <$> prevListS <*> listS <@> chE)
 
-        openCollection listD updatesE
+        makeCollection listD updatesE
         where
             updates prevList list (Collection newCol) = do
                 rebuild <- flattenE <$> onCreation (map remove prevList ++ map add list)
@@ -90,10 +90,10 @@ instance SignalSet (Collection k a) where
 -- | Like 'fmap', but the Collection and interior 'Event' stream are memoized
 mapCollection :: (a -> b) -> Collection k a -> SignalGen (Collection k b)
 mapCollection f aC = do
-  updateE <- snd <$> snapshotCollection aC
+  updateE <- snd <$> openCollection aC
   newCurD    <- memoD $ fmap ((fmap . fmap) f . fst) $ unCollection aC
   newUpdateE <- memoE $ (fmap . fmap) f updateE
-  openCollection newCurD newUpdateE
+  makeCollection newCurD newUpdateE
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
@@ -137,18 +137,18 @@ accumCollection ev = do
         toMapOp (RemoveItem k) = EnumMap.delete k
     mapping <- accumD EnumMap.empty (toMapOp <$> ev)
     listD <- memoD $ EnumMap.toList <$> mapping
-    openCollection listD ev
+    makeCollection listD ev
 
 -- | The primitive interface for creating a 'Collection'. The two
 -- arguments must be coherent, i.e. the value of the discrete at
 -- time /t+1/ should be obtained by applying the updates
 -- at /t+1/ to the value of the discrete at /t/. This invariant
 -- is not checked.
-openCollection
+makeCollection
     :: Discrete [(k, a)]
     -> Event (CollectionUpdate k a)
     -> SignalGen (Collection k a)
-openCollection listD updE = Collection <$> generatorD (gen <$> listD)
+makeCollection listD updE = Collection <$> generatorD (gen <$> listD)
     where
         gen list = do
             updE' <- dropStepE updE
@@ -302,8 +302,8 @@ collectionToDiscreteList = fmap fst . unCollection
 
 -- | Extracts a snapshot of the current values in a collection with
 -- an 'Event' stream of further updates
-snapshotCollection :: Collection k a -> SignalGen ([(k,a)], Event (CollectionUpdate k a))
-snapshotCollection = snapshotD . unCollection
+openCollection :: Collection k a -> SignalGen ([(k,a)], Event (CollectionUpdate k a))
+openCollection = snapshotD . unCollection
 
 --------------------------------------------------------------------------------
 -- Unit tests
@@ -316,7 +316,7 @@ test_switchCollection = test $ do
         col2 <- listToCollection 0 =<< mkD [[12], [], [12,22,32], [22,32], [32]]
         colD <- stepperD col0 =<< eventFromList [[], [], [col1], [], [col2]]
         col <- switchD colD
-        (_, updates) <- snapshotCollection col
+        (_, updates) <- openCollection col
         listS <- discreteToSignal $ collectionToDiscreteList col
         return $ (,) <$> listS <*> (eventToSignal updates)
     result @?=
