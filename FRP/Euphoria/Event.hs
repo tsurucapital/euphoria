@@ -46,6 +46,7 @@ module FRP.Euphoria.Event
 , groupWithInitialByE
 , groupE
 , groupWithInitialE
+, splitOnE
 , differentE
 -- ** Other event operations
 , delayE
@@ -443,6 +444,16 @@ groupE = groupByE (==)
 -- | Same as @groupWithInitialByE (==)@
 groupWithInitialE :: (Eq a) => Event a -> SignalGen (Event (a, Event a))
 groupWithInitialE = groupWithInitialByE (==)
+
+-- | For each Event () received, emit all 'a' in a list since the last
+-- Event () was received. In the case of simultaneous 'a' and '()' in
+-- a step, the 'a' are included in the emitted list.
+splitOnE :: Event () -> Event a -> SignalGen (Event [a])
+splitOnE completeE aE = do
+    let inE = (Right <$> aE) `mappend` (Left <$> completeE)
+    let f (Left ()) accAs = ([], Just (reverse accAs))
+        f (Right a) accAs = (a : accAs, Nothing)
+    memoE =<< justE <$> scanAccumE [] (f <$> inE)
 
 -- | @eventToSignal evt@ is a signal whose value is the list of current
 -- occurrences of @evt@.
@@ -842,11 +853,20 @@ test_groupE = test $ do
         return $ eventToSignal $ joinEventSignal dyn
     result @?= [[], [], [3], [], [3,3]]
 
+test_splitOnE :: Test
+test_splitOnE = test $ do
+    result <- networkToList 5 $ do
+        ev1 <- eventFromList [[1::Int], [2,3,4], [], [5,6], [7,8]]
+        ev2 <- eventFromList [[], [()], [], [], [()]]
+        eventToSignal <$> splitOnE ev2 ev1
+    result @?= [[], [[1,2,3,4]], [], [], [[5,6,7,8]]]
+
 _unitTest :: IO Counts
 _unitTest = runTestTT $ test
     [ test_takeE
     , test_takeWhileE
     , test_groupE
+    , test_splitOnE
     ]
 
 -- vim: ts=2 sts=2
