@@ -8,7 +8,9 @@ module FRP.Euphoria.Collection
 , Collection
 -- * creating collections
 , simpleCollection
-, listToCollection
+, emptyCollection
+, collectionFromList
+, collectionFromDiscreteList
 , mapToCollection
 , makeCollection
 -- * observing collections
@@ -190,14 +192,24 @@ watchCollection (Collection coll) = do
         showExisting (k, a) = "Existing: " ++ show k ++ ", " ++ show a
     switchD =<< stepperD mempty (f <$> ev1)
 
+-- | An empty, unchanging Collection.
+emptyCollection :: Collection k a
+emptyCollection = collectionFromList []
+
+-- | A pure function to create a Collection from key-value pairs. This
+-- collection will never change.
+collectionFromList :: [(k, a)] -> Collection k a
+collectionFromList kvs = Collection $ pure (kvs, mempty)
+
 -- | A somewhat inefficient but easy-to-use way of turning a list of
 -- items into a Collection. Probably should only be used for temporary
 -- hacks. Will perform badly with large lists.
-listToCollection :: (Enum k, Eq a)
-                 => k
-                 -> Discrete [a]
-                 -> SignalGen (Collection k a)
-listToCollection initialK valsD = do
+collectionFromDiscreteList
+    :: (Enum k, Eq a)
+    => k
+    -> Discrete [a]
+    -> SignalGen (Collection k a)
+collectionFromDiscreteList initialK valsD = do
     valsE <- preservesD valsD
     evs <- scanAccumE (initialK, EnumMap.empty) (stepListCollState <$> valsE)
     accumCollection (flattenE evs)
@@ -334,9 +346,9 @@ openCollection = snapshotD . unCollection
 test_switchCollection :: Test
 test_switchCollection = test $ do
     result <- networkToList 5 $ do
-        col0 <- listToCollection (0::Int) =<< mkD [[10::Int], [], [10,20,30], [20,30], [30]]
-        col1 <- listToCollection 0 =<< mkD [[11], [], [11,21,31], [21,31], [31]]
-        col2 <- listToCollection 0 =<< mkD [[12], [], [12,22,32], [22,32], [32]]
+        col0 <- collectionFromDiscreteList (0::Int) =<< mkD [[10::Int], [], [10,20,30], [20,30], [30]]
+        col1 <- collectionFromDiscreteList 0 =<< mkD [[11], [], [11,21,31], [21,31], [31]]
+        col2 <- collectionFromDiscreteList 0 =<< mkD [[12], [], [12,22,32], [22,32], [32]]
         colD <- stepperD col0 =<< eventFromList [[], [], [col1], [], [col2]]
         col <- switchD colD
         (_, updates) <- openCollection col
