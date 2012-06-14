@@ -52,6 +52,8 @@ module FRP.Euphoria.Event
 , delayE
 , dropStepE
 , mapEIO
+, mapE
+, forE
 , memoE
 , joinEventSignal
 , generatorE
@@ -284,6 +286,14 @@ expandE (Event evt) = Event $ f <$> evt
 -- | Like 'mapM' over events.
 mapEIO :: (t -> IO a) -> Event t -> SignalGen (Event a)
 mapEIO mkAction (Event evt) = Event <$> effectful1 (mapM mkAction) evt
+
+-- | Like 'mapM' over events.
+mapE :: (a -> SignalGen b) -> Event a -> SignalGen (Event b)
+mapE f ev = generatorE $ f <$> ev
+
+-- | Like 'forM' over events.
+forE :: Event a -> (a -> SignalGen b) -> SignalGen (Event b)
+forE = flip mapE
 
 -- | Memoization of events. See the doc for 'FRP.Elerea.Simple.memo'.
 memoE :: Event a -> SignalGen (Event a)
