@@ -112,6 +112,7 @@ import Control.Monad (join, replicateM)
 import Control.Monad.Fix
 import Data.Default
 import Data.Either (lefts, rights)
+import Data.IORef (newIORef, modifyIORef, readIORef)
 import Data.List (foldl')
 import Data.Monoid
 import Data.Maybe
@@ -871,12 +872,25 @@ test_splitOnE = test $ do
         eventToSignal <$> splitOnE ev2 ev1
     result @?= [[], [[1,2,3,4]], [], [], [[5,6,7,8]]]
 
+test_forE :: Test
+test_forE = test $ do
+    v <- newIORef 0
+    result <- networkToList 6 $ do
+        evt <- eventFromList [[1::Int], [2], [], [3, 4], [5]]
+        evt' <- forE evt $ \i ->
+            execute $ modifyIORef v (+ i) >> return i
+        stepperS 0 evt'
+    result @?= [1, 2, 2, 4, 5, 5]
+    sum' <- readIORef v
+    sum' @?= 15
+
 _unitTest :: IO Counts
 _unitTest = runTestTT $ test
     [ test_takeE
     , test_takeWhileE
     , test_groupE
     , test_splitOnE
+    , test_forE
     ]
 
 -- vim: ts=2 sts=2
