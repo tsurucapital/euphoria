@@ -93,6 +93,11 @@ module FRP.Euphoria.Event
 , switchDS
 , generatorD'
 , SignalSet (..)
+-- * Evaluation control
+, forceD
+, forceE
+, rnfD
+, rnfE
 -- * Debugging
 -- | Side-effecting trace functions
 , traceSignalMaybe
@@ -106,6 +111,7 @@ module FRP.Euphoria.Event
 ) where
 
 import Control.Applicative
+import Control.DeepSeq
 import Control.Monad (join, replicateM)
 import Control.Monad.Fix
 import Data.Default
@@ -718,6 +724,24 @@ instance EasyApply (Maybe (a -> b)) (Discrete a) (Discrete (Maybe b)) where
 -- Add more as necessary. TODO the application of some more brainpower
 -- should be able to get all possible instances using type-level
 -- programming, I think.
+
+-- Evaluation control
+
+-- | Forces the value in a Discrete.
+forceD :: Discrete a -> SignalGen (Discrete a)
+forceD aD = generatorD $ (\x -> x `seq` return x) <$> aD
+
+-- | Like forceD, but for Event.
+forceE :: Event a -> SignalGen (Event a)
+forceE aE = generatorE $ (\x -> x `seq` return x) <$> aE
+
+-- | Completely evaluates the value in a Discrete.
+rnfD :: (NFData a) => Discrete a -> SignalGen (Discrete a)
+rnfD = forceD . fmap force
+
+-- | Like rnfD, but for Event.
+rnfE :: (NFData a) => Event a -> SignalGen (Event a)
+rnfE = forceE . fmap force
 
 --------------------------------------------------------------------------------
 -- SignalSet

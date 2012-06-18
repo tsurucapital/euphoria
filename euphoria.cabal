@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                euphoria
-version:             0.4.0.0
+version:             0.4.1.0
 synopsis:            Dynamic network FRP with events and continuous values
 description:         
 
@@ -75,4 +75,4 @@ source-repository head
 library
   exposed-modules:     FRP.Euphoria.Event, FRP.Euphoria.Signal, FRP.Euphoria.Update, FRP.Euphoria.Collection, FRP.Euphoria.Abbrev
   -- other-modules:       
-  build-depends:       HUnit, base, elerea >= 2.7, data-default, enummapset
+  build-depends:       HUnit, base, elerea >= 2.7, data-default, enummapset, deepseq
