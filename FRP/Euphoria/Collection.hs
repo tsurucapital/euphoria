@@ -20,6 +20,7 @@ module FRP.Euphoria.Collection
 , openCollection
 -- * other functions
 , mapCollection
+, justCollection
 , sequenceCollection
 ) where
 
@@ -100,6 +101,19 @@ mapCollection f aC = do
   newCurD    <- memoD $ fmap ((fmap . fmap) f . fst) $ unCollection aC
   newUpdateE <- memoE $ (fmap . fmap) f updateE
   makeCollection newCurD newUpdateE
+
+justCollection :: forall k a. (Enum k) => Collection k (Maybe a) -> SignalGen (Collection k a)
+-- Inefficient, quick-hack implementation
+justCollection c = do
+    upds <- collectionToUpdates c
+    let f :: CollectionUpdate k (Maybe a) -> EnumMap k () -> (EnumMap k (), Maybe (CollectionUpdate k a))
+        f (AddItem k Nothing) m = (EnumMap.insert k () m, Nothing)
+        f (AddItem k (Just a)) m = (m, Just (AddItem k a))
+        f (RemoveItem k) m = case EnumMap.lookup k m of
+            Just () -> (EnumMap.delete k m, Nothing)
+            Nothing -> (m, Just (RemoveItem k))
+    upds' <- scanAccumE EnumMap.empty (f <$> upds)
+    accumCollection =<< memoE (justE upds')
 
 -- | Create an 'Event' stream of all updates from a collection, including
 -- the items currently in it.
