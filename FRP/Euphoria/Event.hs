@@ -124,7 +124,6 @@ import Debug.Trace
 import FRP.Euphoria.Signal
 import FRP.Elerea.Simple (transfer, externalMulti, effectful1, until, stateful)
 import Prelude hiding (until)
-import Test.HUnit
 
 -- | @Event a@ represents a stream of events whose occurrences carry
 -- a value of @a@. The event can have zero, one or more occurrences
@@ -847,50 +846,5 @@ networkToList :: Int -> SignalGen (Signal a) -> IO [a]
 networkToList n network = do
     sample <- start network
     replicateM n sample
-
---------------------------------------------------------------------------------
--- Unit tests
-
-test_takeE :: Test
-test_takeE = test $ do
-    result <- networkToList 5 $ do
-        evt <- eventFromList [[1], [1::Int], [2,3], [], [4]]
-        evt2 <- takeE 3 evt
-        accumS 0 $ (+) <$> evt2
-    result @?= [1, 2, 4, 4, 4]
-
-test_takeWhileE :: Test
-test_takeWhileE = test $ do
-    result <- networkToList 5 $ do
-        evt <- eventFromList [[1], [1::Int], [2,3], [], [4]]
-        evt2 <- takeWhileE (<3) evt
-        accumS 0 $ (+) <$> evt2
-    result @?= [1, 2, 4, 4, 4]
-
-test_groupE :: Test
-test_groupE = test $ do
-    result <- networkToList 5 $ do
-        evt <- eventFromList [[1], [1::Int], [2,3], [], [3,3,4]]
-        evt2 <- groupE evt
-        threes <- takeE 1 =<< dropE 2 evt2
-        dyn <- stepperS mempty threes
-        return $ eventToSignal $ joinEventSignal dyn
-    result @?= [[], [], [3], [], [3,3]]
-
-test_splitOnE :: Test
-test_splitOnE = test $ do
-    result <- networkToList 5 $ do
-        ev1 <- eventFromList [[1::Int], [2,3,4], [], [5,6], [7,8]]
-        ev2 <- eventFromList [[], [()], [], [], [()]]
-        eventToSignal <$> splitOnE ev2 ev1
-    result @?= [[], [[1,2,3,4]], [], [], [[5,6,7,8]]]
-
-_unitTest :: IO Counts
-_unitTest = runTestTT $ test
-    [ test_takeE
-    , test_takeWhileE
-    , test_groupE
-    , test_splitOnE
-    ]
 
 -- vim: ts=2 sts=2
