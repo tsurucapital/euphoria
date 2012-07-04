@@ -1,3 +1,6 @@
 language: haskell
+before_install:
+    - "cabal install test-framework-hunit"
+    - "cabal install test-framework-th"
 notifications:
   email: false
