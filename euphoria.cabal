@@ -76,3 +76,15 @@ library
   exposed-modules:     FRP.Euphoria.Event, FRP.Euphoria.Signal, FRP.Euphoria.Update, FRP.Euphoria.Collection, FRP.Euphoria.Abbrev
   -- other-modules:       
   build-depends:       HUnit, base, elerea >= 2.7, data-default, enummapset, deepseq
+
+test-suite tests
+  type:           exitcode-stdio-1.0
+  main-is:        Tests.hs
+  hs-source-dirs: tests
+  ghc-options:    -Wall
+  build-depends:  HUnit
+                , base
+                , euphoria
+                , test-framework
+                , test-framework-hunit
+                , test-framework-th
