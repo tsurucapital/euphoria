@@ -98,12 +98,17 @@ discreteToUpdate :: Discrete a -> SignalGen (Update (Maybe a))
 discreteToUpdate aD = updateUseLast <$> preservesD aD
 
 -- | Do the same thing as 'updateUseAll' but use (>>) in place of mappend.
-updateUseAllIO :: Event (IO ()) -> Update (IO ())
+updateUseAllIO :: Monoid a => Event (IO a) -> Update (IO a)
 updateUseAllIO ioE = unIOMonoid <$> updateUseAll (IOMonoid <$> ioE)
 
 -- | Do the same thing as 'mappend' but use (>>) in place of mappend.
-mappendUpdateIO :: Update (IO ()) -> Update (IO ()) -> Update (IO ())
+mappendUpdateIO :: Monoid a => Update (IO a) -> Update (IO a) -> Update (IO a)
 mappendUpdateIO d1 d2 = unIOMonoid <$> ((IOMonoid <$> d1) `mappend` (IOMonoid <$> d2))
+{-# RULES "mappendUpdateIO/()" mappendUpdateIO = mappendUpdateIOUnit #-}
+
+-- | Do the same thing as 'mappendUpdateIO' but specialized to 'IO ()'
+mappendUpdateIOUnit :: Update (IO ()) -> Update (IO ()) -> Update (IO ())
+mappendUpdateIOUnit = liftA2 (>>)
 
 instance (Monoid a) => SignalSet (Update a) where
     basicSwitchD dis = do
