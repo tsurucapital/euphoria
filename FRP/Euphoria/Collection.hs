@@ -8,6 +8,8 @@ module FRP.Euphoria.Collection
 , Collection
 -- * creating collections
 , simpleCollection
+, accumCollection
+, collectionToUpdates
 , emptyCollection
 , collectionFromList
 , collectionFromDiscreteList
