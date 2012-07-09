@@ -1,4 +1,4 @@
-{-# LANGUAGE DeriveFunctor, MultiParamTypeClasses, DeriveDataTypeable, BangPatterns, DoRec #-}
+{-# LANGUAGE CPP, DeriveFunctor, MultiParamTypeClasses, DeriveDataTypeable, BangPatterns, DoRec #-}
 
 -- For EasyApply
 {-# LANGUAGE FlexibleInstances, FunctionalDependencies #-}
@@ -741,6 +741,12 @@ rnfD = forceD . fmap force
 -- | Like rnfD, but for Event.
 rnfE :: (NFData a) => Event a -> SignalGen (Event a)
 rnfE = forceE . fmap force
+
+#if !MIN_VERSION_deepseq(1,2,0)
+force :: NFData a => a -> a
+force x = x `deepseq` x
+#endif
+
 
 --------------------------------------------------------------------------------
 -- SignalSet
