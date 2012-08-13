@@ -38,3 +38,12 @@ case_switchCollection = do
         ]
     where
         mkD list = signalToDiscrete <$> signalFromList list
+
+case_mapCollection :: Assertion
+case_mapCollection = do
+    result <- networkToList 1 $ do
+        col <- mapCollection show $
+            collectionFromList [(0 :: Int, 1 :: Int), (1, 2), (2, 3)]
+        discreteToSignal $ collectionToDiscreteList col
+
+    result @?= [[(0, "1"), (1, "2"), (2, "3")]]
