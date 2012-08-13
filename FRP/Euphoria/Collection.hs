@@ -108,7 +108,7 @@ mapCollectionWithKey f aC = do
     newUpdateE <- memoE $ fmap fcu updateE
     makeCollection newCurD newUpdateE
   where
-    -- f applied to tupples and collection updates
+    -- f applied to tuples and collection updates
     ft (k, x)          = (k, f k x)
     fcu (AddItem k x)  = AddItem k (f k x)
     fcu (RemoveItem k) = RemoveItem k
