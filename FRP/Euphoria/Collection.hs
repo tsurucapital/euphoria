@@ -22,6 +22,7 @@ module FRP.Euphoria.Collection
 , openCollection
 -- * other functions
 , mapCollection
+, mapCollectionWithKey
 , justCollection
 , sequenceCollection
 ) where
@@ -97,11 +98,20 @@ instance SignalSet (Collection k a) where
 
 -- | Like 'fmap', but the Collection and interior 'Event' stream are memoized
 mapCollection :: (a -> b) -> Collection k a -> SignalGen (Collection k b)
-mapCollection f aC = do
-  updateE <- snd <$> openCollection aC
-  newCurD    <- memoD $ fmap ((fmap . fmap) f . fst) $ unCollection aC
-  newUpdateE <- memoE $ (fmap . fmap) f updateE
-  makeCollection newCurD newUpdateE
+mapCollection = mapCollectionWithKey . const
+
+-- | A version of 'mapCollection' which provides access to the key
+mapCollectionWithKey :: (k -> a -> b) -> Collection k a -> SignalGen (Collection k b)
+mapCollectionWithKey f aC = do
+    updateE    <- snd <$> openCollection aC
+    newCurD    <- memoD $ fmap (fmap ft . fst) $ unCollection aC
+    newUpdateE <- memoE $ fmap fcu updateE
+    makeCollection newCurD newUpdateE
+  where
+    -- f applied to tupples and collection updates
+    ft (k, x)          = (k, f k x)
+    fcu (AddItem k x)  = AddItem k (f k x)
+    fcu (RemoveItem k) = RemoveItem k
 
 justCollection :: forall k a. (Enum k) => Collection k (Maybe a) -> SignalGen (Collection k a)
 -- Inefficient, quick-hack implementation
