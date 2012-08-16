@@ -525,7 +525,7 @@ differentE :: (Eq a) => Event a -> SignalGen (Event a)
 differentE ev = (justE . (f <$>)) <$> withPrevE Nothing (Just <$> ev)
   where
     f :: (Eq a) => (Maybe a, Maybe a) -> Maybe a
-    f (new, old) = if new /= old then new else old
+    f (new, old) = if new /= old then new else Nothing
 
 instance Applicative Discrete where
   pure x = Discrete $ pure (False, x)
