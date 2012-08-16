@@ -319,15 +319,17 @@ onCreation x = Event <$> delayS [x] (return [])
 delayE :: Event a -> SignalGen (Event a)
 delayE (Event x) = Event <$> delayS [] x
 
--- | @withPrevE initial evt@ is an Event which occurs every time
+-- | @withPrevE evt@ is an Event which occurs every time
 -- @evt@ occurs. Each occurrence carries a pair, whose first element
 -- is the value of the current occurrence of @evt@, and whose second
--- element is the value of the previous occurrence of @evt@, or
--- @initial@ if there has been none.
-withPrevE :: a -> Event a -> SignalGen (Event (a, a))
-withPrevE initial evt = accumE (initial, undefined) $ toUpd <$> evt
-  where
-    toUpd val (new, _old) = (val, new)
+-- element is the value of the previous occurrence of @evt@.
+withPrevE :: Event a -> SignalGen (Event (a, a))
+withPrevE evt =
+    justE . fmap pairMaybe <$> accumE (Nothing, Nothing) (toUpd <$> evt)
+    where
+        toUpd cur (prev, _) = (Just cur, prev)
+        pairMaybe :: (Maybe a, Maybe b) -> Maybe (a, b)
+        pairMaybe = uncurry (liftA2 (,))
 
 -- | @generatorE evt@ creates a subnetwork every time @evt@ occurs.
 generatorE :: Event (SignalGen a) -> SignalGen (Event a)
@@ -522,10 +524,10 @@ accumD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
 
 -- | Filter events to only those which are different than the previous event.
 differentE :: (Eq a) => Event a -> SignalGen (Event a)
-differentE ev = (justE . (f <$>)) <$> withPrevE Nothing (Just <$> ev)
+differentE ev = (justE . (f <$>)) <$> withPrevE ev
   where
-    f :: (Eq a) => (Maybe a, Maybe a) -> Maybe a
-    f (new, old) = if new /= old then new else Nothing
+    f :: (Eq a) => (a, a) -> Maybe a
+    f (new, old) = if new == old then Nothing else Just new
 
 instance Applicative Discrete where
   pure x = Discrete $ pure (False, x)
