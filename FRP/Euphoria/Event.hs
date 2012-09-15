@@ -1,9 +1,16 @@
-{-# LANGUAGE CPP, DeriveFunctor, MultiParamTypeClasses, DeriveDataTypeable, BangPatterns, DoRec #-}
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DoRec #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 -- For EasyApply
-{-# LANGUAGE FlexibleInstances, FunctionalDependencies #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FunctionalDependencies #-}
 
 {-# OPTIONS_GHC -Wall #-}
+
 -- | Event/discrete layer constructed on top of Elerea.
 -- The API is largely inspired by reactive-banana.
 module FRP.Euphoria.Event
