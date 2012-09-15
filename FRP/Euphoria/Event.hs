@@ -118,7 +118,7 @@ module FRP.Euphoria.Event
 
 import Control.Applicative
 import Control.DeepSeq
-import Control.Monad (join, replicateM)
+import Control.Monad ((<=<), join, replicateM)
 import Control.Monad.Fix
 import Data.Default
 import Data.Either (lefts, rights)
@@ -580,10 +580,18 @@ generatorD (Discrete sig) = do
 generatorD' :: (SignalSet s) => Discrete (SignalGen s) -> SignalGen s
 generatorD' dis = generatorD dis >>= switchD
 
+mapMD :: (Signal (Bool, a) -> SignalGen (Signal (Bool, b)))
+      -> Discrete a -> SignalGen (Discrete b)
+mapMD f (Discrete dis) = Discrete <$> f dis
+
+liftD :: ((Bool, a) -> Maybe (Bool, b) -> Maybe (Bool, b))
+      -> Discrete a -> SignalGen (Discrete b)
+liftD f = mapMD (fmap (fmap fromJust) . transfer Nothing f)
+
 -- | @minimizeChanges dis@ creates a Discrete whose value is same as @dis@.
 -- The resulting discrete is considered changed only if it is really changed.
 minimizeChanges :: (Eq a) => Discrete a -> SignalGen (Discrete a)
-minimizeChanges (Discrete dis) = Discrete . fmap fromJust <$> transfer Nothing upd dis
+minimizeChanges = liftD upd
   where
     upd (False, _) (Just (_, cache)) = Just (False, cache)
     upd (True, val) (Just (_, cache))
@@ -591,19 +599,19 @@ minimizeChanges (Discrete dis) = Discrete . fmap fromJust <$> transfer Nothing u
     upd (new, val) _ = Just (new, val)
 
 recordDiscrete :: Discrete a -> SignalGen (Discrete a)
-recordDiscrete (Discrete dis) = Discrete . fmap fromJust <$> transfer Nothing upd dis
+recordDiscrete = liftD upd
   where
     upd (False, _) (Just (_, cache)) = Just (False, cache)
     upd new_val _ = Just new_val
 
 -- | Converts a 'Discrete' to an equivalent 'Signal'.
 discreteToSignal :: Discrete a -> SignalGen (Signal a)
-discreteToSignal dis = discreteToSignalNoMemo <$> recordDiscrete dis
+discreteToSignal = fmap discreteToSignalNoMemo . recordDiscrete
 
 -- | @switchD dis@ creates some signal-like thing whose value is
 -- same as the thing @dis@ currently contains.
 switchD :: (SignalSet s) => Discrete s -> SignalGen s
-switchD dis = recordDiscrete dis >>= basicSwitchD >>= memoizeSignalSet
+switchD = memoizeSignalSet <=< basicSwitchD <=< recordDiscrete
 
 -- | @switchDS@ selects current @Signal a@ of a 'Discrete'.
 -- 
@@ -658,15 +666,13 @@ traceDiscreteT loc f (Discrete sig) = Discrete $ traceSignalMaybe loc msg sig
 
 keepJustsD :: Discrete (Maybe (Maybe a))
            -> SignalGen (Discrete (Maybe a))
-keepJustsD tm = do
-    emm <- preservesD tm
-    stepperD Nothing (justE emm)
+keepJustsD = stepperD Nothing . justE <=< preservesD
 
 keepDJustsD :: Discrete (Maybe (Discrete a))
             -> SignalGen (Discrete (Maybe a))
 keepDJustsD dmd =
-    fmap (fmap Just) . justE <$> preservesD dmd
-    >>= stepperD (return Nothing) >>= switchD
+    switchD =<< stepperD (return Nothing) =<<
+    fmap (fmap (fmap Just) . justE) (preservesD dmd)
 
 -- $app_discrete_maybe
 -- Convenience combinators for working with \''Discrete' a\' and \''Discrete'
