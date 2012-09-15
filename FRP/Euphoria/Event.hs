@@ -3,7 +3,6 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DoRec #-}
-{-# LANGUAGE MultiParamTypeClasses #-}
 
 -- For EasyApply
 {-# LANGUAGE FlexibleInstances #-}
