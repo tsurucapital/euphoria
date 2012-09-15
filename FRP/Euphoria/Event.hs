@@ -199,9 +199,7 @@ eachStep = Event . fmap (:[])
 
 -- | 'Discrete' version of eachStep.
 eachStepD :: Discrete a -> SignalGen (Event a)
-eachStepD d = do
-  sig <- discreteToSignal d
-  return $ eachStep sig
+eachStepD = fmap eachStep . discreteToSignal
 
 -- | The basic construct to build a stateful signal. @accumS initial evt@
 -- returns a signal whose value is originally @initial@. For each occurrence
@@ -274,14 +272,21 @@ dropStepE ev = do
         discardIf True _ = Nothing
         discardIf False x = Just x
 
+mapE :: ([a] -> [b]) -> Event a -> Event b
+mapE f (Event evt) = Event (f <$> evt)
+
+mapMS :: (Signal [a] -> SignalGen (Signal [b]))
+      -> Event a -> SignalGen (Event b)
+mapMS f (Event evt) = Event <$> f evt
+
 -- | Converts an event stream of lists into a stream of their elements.
 -- All elements of a list become simultaneous occurrences.
 flattenE :: Event [a] -> Event a
-flattenE (Event evt) = Event $ concat <$> evt
+flattenE = mapE concat
 
 -- | Expand simultaneous events (if any)
 expandE :: Event a -> Event [a]
-expandE (Event evt) = Event $ f <$> evt
+expandE = mapE f
     where
         f [] = []
         f xs = [xs]
@@ -292,7 +297,7 @@ mapEIO mkAction (Event evt) = Event <$> effectful1 (mapM mkAction) evt
 
 -- | Memoization of events. See the doc for 'FRP.Elerea.Simple.memo'.
 memoE :: Event a -> SignalGen (Event a)
-memoE (Event evt) = Event <$> memoS evt
+memoE = mapMS memoS
 
 -- | An event whose occurrences come from different event stream
 -- each step.
@@ -303,7 +308,7 @@ joinEventSignal sig = Event $ do
 
 -- | Remove occurrences that are 'Nothing'.
 justE :: Event (Maybe a) -> Event a
-justE (Event evt) = Event $ catMaybes <$> evt
+justE = mapE catMaybes
 
 -- | Like 'mapMaybe' over events.
 mapMaybeE :: (a -> Maybe b) -> Event a -> Event b
@@ -317,7 +322,7 @@ onCreation x = Event <$> delayS [x] (return [])
 -- | @delayE evt@ creates an event whose occurrences are
 -- same as the occurrences of @evt@ in the previous step.
 delayE :: Event a -> SignalGen (Event a)
-delayE (Event x) = Event <$> delayS [] x
+delayE = mapMS (delayS [])
 
 -- | @withPrevE initial evt@ is an Event which occurs every time
 -- @evt@ occurs. Each occurrence carries a pair, whose first element
@@ -331,12 +336,12 @@ withPrevE initial evt = accumE (initial, undefined) $ toUpd <$> evt
 
 -- | @generatorE evt@ creates a subnetwork every time @evt@ occurs.
 generatorE :: Event (SignalGen a) -> SignalGen (Event a)
-generatorE (Event evt) = Event <$> generatorS (sequence <$> evt)
+generatorE = mapMS (generatorS . fmap sequence)
 
 -- | @dropE n evt@ returns an event, which behaves similarly to
 -- @evt@ except that its first @n@ occurrences are dropped.
 dropE :: Int -> Event a -> SignalGen (Event a)
-dropE n (Event evt) = Event . fmap fst <$> transfer ([], n) upd evt
+dropE n = mapMS (fmap (fmap fst) . transfer ([], n) upd)
     where
         upd occs (_, k)
             | k <= 0 = (occs, 0)
@@ -348,7 +353,7 @@ dropE n (Event evt) = Event . fmap fst <$> transfer ([], n) upd evt
 -- @evt@ except that all its occurrences before the first one
 -- that satisfies @p@ are dropped.
 dropWhileE :: (a -> Bool) -> Event a -> SignalGen (Event a)
-dropWhileE p (Event evt) = Event . fmap fst <$> transfer ([], False) upd evt
+dropWhileE p = mapMS (fmap (fmap fst) . transfer ([], False) upd)
   where
     upd occs (_, True) = (occs, True)
     upd occs (_, False) = case span p occs of
@@ -416,11 +421,11 @@ partitionEithersE evt = do
 
 -- | Keep occurrences which are Left.
 leftE :: Event (Either e a) -> Event e
-leftE (Event evt) = Event $ lefts <$> evt
+leftE = mapE lefts
 
 -- | Keep occurrences which are Right.
 rightE :: Event (Either e a) -> Event a
-rightE (Event evt) = Event $ rights <$> evt
+rightE = mapE rights
 
 -- | @groupByE eqv evt@ creates a stream of event streams, each corresponding
 -- to a span of consecutive occurrences of equivalent elements in the original
