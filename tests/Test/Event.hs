@@ -1,7 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
 module Test.Event (eventTestGroup) where
 import Control.Applicative ((<$>))
-import Data.Monoid (mempty)
+import Data.Monoid (mempty, mappend)
 
 import Test.Framework (Test)
 import Test.Framework.TH
@@ -46,3 +46,35 @@ case_splitOnE = do
         ev2 <- eventFromList [[], [()], [], [], [()]]
         eventToSignal <$> splitOnE ev2 ev1
     result @?= [[], [[1,2,3,4]], [], [], [[5,6,7,8]]]
+
+case_withPrevE :: Assertion
+case_withPrevE = do
+    result <- networkToList 5 $ do
+        ev <- eventFromList [[1::Int], [2,3,4], [], [5,6], [7,8]]
+        eventToSignal <$> withPrevE ev
+    result @?= [ []
+               , [(2,1),(3,2),(4,3)]
+               , []
+               , [(5,4),(6,5)]
+               , [(7,6),(8,7)]
+               ]
+
+case_withPrevEWithInitVal :: Assertion
+case_withPrevEWithInitVal = do
+    result <- networkToList 5 $ do
+        ev <- eventFromList [[1::Int], [2,3,4], [], [5,6], [7,8]]
+        initE <- onCreation 0
+        eventToSignal <$> withPrevE (initE `mappend` ev)
+    result @?= [ [(1,0)]
+               , [(2,1),(3,2),(4,3)]
+               , []
+               , [(5,4),(6,5)]
+               , [(7,6),(8,7)]
+               ]
+
+case_differentE :: Assertion
+case_differentE = do
+    result <- networkToList 6 $ do
+        ev <- eventFromList [[1 :: Int], [1, 1, 2], [], [3, 3], [3], [3, 4]]
+        eventToSignal <$> differentE ev
+    result @?= [[], [2], [], [3], [], [4]]
