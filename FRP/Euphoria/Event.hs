@@ -64,6 +64,7 @@ module FRP.Euphoria.Event
 , stepperD
 , stepperDefD
 , stepperMaybeD
+, justD
 , accumD
 -- ** Conversion into events
 , eachStepD
@@ -511,6 +512,12 @@ stepperDefD = stepperD def
 -- type in 'Maybe'.
 stepperMaybeD :: Event a -> SignalGen (Discrete (Maybe a))
 stepperMaybeD ev = stepperDefD (Just <$> ev)
+
+-- | Given an initial value, filter out the Nothings.
+justD :: a -> Discrete (Maybe a) -> SignalGen (Discrete a)
+justD initial mD = do
+    mE <- preservesD mD
+    stepperD initial (justE mE)
 
 -- | Like @accumS@, but creates a 'Discrete'.
 accumD :: a -> Event (a -> a) -> SignalGen (Discrete a)

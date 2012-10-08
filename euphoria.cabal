@@ -60,7 +60,7 @@ description:
 
 license:             PublicDomain
 license-file:        LICENSE
-author:              Takano Akio, Andrew Richards
+author:              Takano Akio, Andrew Richards, Liyang HU
 maintainer:          aljee@hyper.cx <Takano Akio>
 -- copyright:           
 category:            FRP
