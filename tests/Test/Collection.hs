@@ -23,7 +23,7 @@ case_switchCollection = do
         col <- switchD colD
         (_, updates) <- openCollection col
         listS <- discreteToSignal $ collectionToDiscreteList col
-        return $ (,) <$> listS <*> (eventToSignal updates)
+        return $ (,) <$> listS <*> eventToSignal updates
     result @?=
         [ ([(0, 10)]
             , [])

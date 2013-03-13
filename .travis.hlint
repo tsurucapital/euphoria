@@ -1,0 +1,5 @@
+#! /bin/bash
+
+SRC="$(sed -ne 's/^\W*hs-source-dirs:\W*\(.*\)$/\1/p' *.cabal)"
+hlint --cpp-simple -i "Use camelCase" -i "Reduce duplication" ${SRC:-.}
+

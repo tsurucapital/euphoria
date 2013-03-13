@@ -29,9 +29,8 @@ case_startUpdateNetwork = do
 
 case_skip :: Assertion
 case_skip = do
-    (sample, step) <- startUpdateNetwork $ do
-        update <- updateUseLast <$> eventFromList [[1], [2, 3], [], [4::Int]]
-        return $ update
+    (sample, step) <- startUpdateNetwork $
+        updateUseLast <$> eventFromList [[1], [2, 3], [], [4::Int]]
     step
     val0 <- sample
     val1 <- sample

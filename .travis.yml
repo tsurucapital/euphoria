@@ -1,6 +1,19 @@
 language: haskell
+
 before_install:
-    - "cabal install test-framework-hunit"
-    - "cabal install test-framework-th"
+  - ./.travis.install-deps $mode --constraint="bytestring installed" --constraint="template-haskell == 2.7.0.0" --force-reinstalls
+
+install:
+  - cabal configure $mode
+  - cabal build
+
+script:
+  - cabal test --show-details=always
+  - ./.travis.hlint
+
+env:
+  - mode="-fWerror --enable-tests"
+
 notifications:
   email: false
+
