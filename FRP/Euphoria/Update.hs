@@ -1,6 +1,8 @@
-{-# LANGUAGE ExistentialQuantification, TupleSections, BangPatterns #-}
-
+{-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE ExistentialQuantification #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
+
 -- | Signals for incremental updates.
 module FRP.Euphoria.Update
     ( Update(..)

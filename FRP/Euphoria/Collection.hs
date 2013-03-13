@@ -1,6 +1,16 @@
+{-# LANGUAGE CPP #-}
+{-# LANGUAGE DeriveFoldable #-}
+{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# OPTIONS_GHC -Wall #-}
-{-# LANGUAGE DoRec, ScopedTypeVariables, TupleSections
-            ,DeriveFunctor, DeriveTraversable, DeriveFoldable #-}
+
+#if __GLASGOW_HASKELL__ <= 706
+{-# LANGUAGE DoRec #-}
+#else
+{-# LANGUAGE RecursiveDo #-}
+#endif
 
 -- | Collection signals with incremental updates.
 module FRP.Euphoria.Collection
