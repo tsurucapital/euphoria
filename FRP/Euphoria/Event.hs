@@ -111,12 +111,13 @@ module FRP.Euphoria.Event
 , networkToList
 ) where
 
+import Control.Arrow ((&&&))
 import Control.Applicative
 import Control.DeepSeq
 import Control.Monad (join, replicateM)
 import Control.Monad.Fix
 import Data.Default
-import Data.Either (lefts, rights)
+import Data.Either (partitionEithers, lefts, rights)
 import Data.List (foldl')
 import Data.Monoid
 import Data.Maybe
@@ -409,19 +410,19 @@ generalPrefixE prefixTaker (Event evt) = do
         -- doesn't reduce to prev. This means each iteration
         -- the signal gets bigger and more expensive to evaluate.
 
--- | Split a stream of 'Either's into two, based on tags.
+-- | Split a stream of 'Either's into two, based on tags. This needs to be
+-- in SignalGen in order to memoise the intermediate result.
 partitionEithersE :: Event (Either a b) -> SignalGen (Event a, Event b)
-partitionEithersE evt = do
-    evt' <- memoE evt
-    return (leftE evt', rightE evt')
+partitionEithersE (Event eithersS) = (Event . fmap fst &&& Event . fmap snd)
+  <$> memoS (partitionEithers <$> eithersS)
 
 -- | Keep occurrences which are Left.
 leftE :: Event (Either e a) -> Event e
-leftE (Event evt) = Event $ lefts <$> evt
+leftE (Event eithersS) = Event (lefts <$> eithersS)
 
 -- | Keep occurrences which are Right.
 rightE :: Event (Either e a) -> Event a
-rightE (Event evt) = Event $ rights <$> evt
+rightE (Event eithersS) = Event (rights <$> eithersS)
 
 -- | @groupByE eqv evt@ creates a stream of event streams, each corresponding
 -- to a span of consecutive occurrences of equivalent elements in the original
