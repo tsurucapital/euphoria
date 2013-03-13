@@ -29,8 +29,8 @@ module FRP.Euphoria.Collection
 
 import Control.Applicative
 import Control.Monad (join)
-import Data.EnumMap (EnumMap)
-import qualified Data.EnumMap as EnumMap
+import Data.EnumMap.Lazy (EnumMap)
+import qualified Data.EnumMap.Lazy as EnumMap
 import Data.List
 import Data.Maybe (mapMaybe)
 import Data.Traversable
@@ -170,7 +170,7 @@ simpleCollectionUpdates initialK evs = do
         removalEvent' <- delayE removalEvent
         removalEvents <- accumD EnumMap.empty
             ((addItem <$> newEvents) `mappend` (EnumMap.delete <$> removalEvent'))
-        removalEvent <- switchD $ EnumMap.foldWithKey
+        removalEvent <- switchD $ EnumMap.foldrWithKey
             (\k ev ev' -> (k <$ ev) `mappend` ev') mempty <$> removalEvents
     let -- updateAddItem :: (Enum k) => (k, a, Event ()) -> CollectionUpdate k a
         updateAddItem (k, a, _) = AddItem k a
