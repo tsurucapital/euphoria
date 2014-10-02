@@ -1,7 +1,7 @@
 language: haskell
 
 before_install:
-  - ./.travis.install-deps $mode --constraint="bytestring installed" --constraint="template-haskell == 2.7.0.0" --force-reinstalls
+  - ./.travis.install-deps $mode --constraint="bytestring installed" --force-reinstalls
 
 install:
   - cabal configure $mode
