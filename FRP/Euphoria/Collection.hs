@@ -33,6 +33,8 @@ module FRP.Euphoria.Collection
 -- * other functions
 , mapCollection
 , mapCollectionWithKey
+, filterCollection
+, filterCollectionWithKey
 , justCollection
 , sequenceCollection
 ) where
@@ -122,6 +124,15 @@ mapCollectionWithKey f aC = do
     ft (k, x)          = (k, f k x)
     fcu (AddItem k x)  = AddItem k (f k x)
     fcu (RemoveItem k) = RemoveItem k
+
+filterCollection :: (Enum k) => (a -> Bool) -> Collection k a -> SignalGen (Collection k a)
+filterCollection = filterCollectionWithKey . const
+
+filterCollectionWithKey :: forall k a. (Enum k) => (k -> a -> Bool) -> Collection k a -> SignalGen (Collection k a)
+filterCollectionWithKey f aC = mapCollectionWithKey f' aC >>= justCollection where
+    f' k v
+        | f k v = Just v
+        | otherwise = Nothing
 
 justCollection :: forall k a. (Enum k) => Collection k (Maybe a) -> SignalGen (Collection k a)
 -- Inefficient, quick-hack implementation
