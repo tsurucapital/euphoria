@@ -2,7 +2,7 @@
 -- see http://haskell.org/cabal/users-guide/
 
 name:                euphoria
-version:             0.4.8.1
+version:             0.4.9.0
 synopsis:            Dynamic network FRP with events and continuous values
 description:         
 
