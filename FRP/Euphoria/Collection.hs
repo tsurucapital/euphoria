@@ -297,6 +297,14 @@ stepListCollState xs (initialK, existingMap) = ((k', newMap'), removeUpdates ++ 
 -------------------------------------------------------------------------------
 -- Converting Discrete Maps into Collections
 
+mapToCollection :: forall k a.
+                  (Enum k, Eq k, Eq a)
+                => Discrete (EnumMap k a)
+                -> SignalGen (Collection k (Discrete a))
+mapToCollection mapD =
+    genericMapToCollection EnumMap.empty $
+        diffMaps (EnumMap.\\) EnumMap.intersection EnumMap.lookup EnumMap.toList
+
 data MapCollEvent k a
     = MCNew k a
     | MCChange k a
@@ -309,18 +317,28 @@ data MapCollEvent k a
 -- that are present in both but have new values will have their
 -- Discrete value updated, and keys with values that are still present
 -- will not have their Discrete values updated.
-mapToCollection :: forall k a.
-                  (Enum k, Eq k, Eq a)
-                => Discrete (EnumMap k a)
-                -> SignalGen (Collection k (Discrete a))
-mapToCollection mapD = do
-    m1 <- delayD EnumMap.empty mapD
+genericMapToCollection
+    :: forall c k a. (Eq k)
+    => c k a                                  -- ^ Empty map
+    -> (c k a -> c k a -> [MapCollEvent k a]) -- ^ Function for diffing maps
+    -> Discrete (c k a)                       -- ^ A discrete of maps
+    -> SignalGen (Collection k (Discrete a))
+genericMapToCollection emptyMap diffFn mapD = do
+    m1 <- delayD emptyMap mapD
     let collDiffs :: Discrete [MapCollEvent k a]
-        collDiffs = mapCollDiff <$> m1 <*> mapD
+        collDiffs = diffFn <$> m1 <*> mapD
     dispatchCollEvent . flattenE =<< preservesD collDiffs
 
-mapCollDiff :: (Enum k, Eq a) => EnumMap k a -> EnumMap k a -> [MapCollEvent k a]
-mapCollDiff prevmap newmap = concat
+-- | Given a pair of generic maps, compute a sequence of "MapCollEvent"s
+-- which would transform the first into the second.
+diffMaps
+    :: (Eq a)
+    => (c k a -> c k a -> c k a) -- ^ Difference
+    -> (c k a -> c k a -> c k a) -- ^ Intersection
+    -> (k -> c k a -> Maybe a)   -- ^ Lookup
+    -> (c k a -> [(k, a)])       -- ^ To list
+    -> c k a -> c k a -> [MapCollEvent k a]
+diffMaps difference intersection mapLookup toList prevmap newmap = concat
     [ map (uncurry MCNew   ) newStuff
     , map (MCRemove . fst  ) removedStuff
     , map (uncurry MCChange) changedStuff
