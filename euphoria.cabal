@@ -4,7 +4,7 @@
 name:                euphoria
 version:             0.4.9.0
 synopsis:            Dynamic network FRP with events and continuous values
-description:         
+description:
 
  Euphoria is FRP with practicality.
  .
@@ -62,7 +62,7 @@ license:             PublicDomain
 license-file:        LICENSE
 author:              Takano Akio, Andrew Richards, Liyang HU
 maintainer:          aljee@hyper.cx <Takano Akio>
--- copyright:           
+-- copyright:
 category:            FRP
 build-type:          Simple
 cabal-version:       >=1.8
@@ -74,8 +74,16 @@ source-repository head
 
 library
   exposed-modules:     FRP.Euphoria.Event, FRP.Euphoria.Signal, FRP.Euphoria.Update, FRP.Euphoria.Collection, FRP.Euphoria.Abbrev
-  -- other-modules:       
-  build-depends:       HUnit, base, elerea >= 2.7, data-default, enummapset-th >= 0.6, deepseq
+  -- other-modules:
+  build-depends:       HUnit
+                     , base
+                     , elerea >= 2.7
+                     , data-default
+                     , enummapset-th >= 0.6
+                     , deepseq
+                     , hashable >= 1.2
+                     , containers >= 0.5.6
+                     , unordered-containers >= 0.2.5
 
 test-suite tests
   type:           exitcode-stdio-1.0
