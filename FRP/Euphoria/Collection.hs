@@ -320,44 +320,39 @@ mapToCollection mapD = do
     dispatchCollEvent . flattenE =<< preservesD collDiffs
 
 mapCollDiff :: (Enum k, Eq a) => EnumMap k a -> EnumMap k a -> [MapCollEvent k a]
-mapCollDiff prevmap newmap = newEvs ++ removeEvs ++ changeEvs
+mapCollDiff prevmap newmap = concat
+    [ map (uncurry MCNew   ) newStuff
+    , map (MCRemove . fst  ) removedStuff
+    , map (uncurry MCChange) changedStuff
+    ]
   where
-    newStuff = newmap EnumMap.\\ prevmap
-    removedStuff = prevmap EnumMap.\\ newmap
-    keptStuff = newmap `EnumMap.intersection` prevmap
-    changedStuff = mapMaybe f (EnumMap.toList keptStuff)
-      where f (k, v1) = case EnumMap.lookup k prevmap of
-                Nothing -> Nothing
-                Just v2 | v1 /= v2 -> Just (k, v1)
-                        | otherwise -> Nothing
-    makeNew (k, v) = MCNew k v
-    makeRemove (k, _) = MCRemove k
-    makeChange (k, v) = MCChange k v
-    newEvs = map makeNew (EnumMap.toList newStuff)
-    removeEvs = map makeRemove (EnumMap.toList removedStuff)
-    changeEvs = map makeChange changedStuff
+    newStuff     = toList $ newmap `difference` prevmap
+    removedStuff = toList $ prevmap `difference` newmap
+    keptStuff    = toList $ newmap `intersection` prevmap
+    changedStuff = mapMaybe justChanges keptStuff
+    justChanges (k, v1) = case mapLookup k prevmap of
+        Just v2 | v1 /= v2  -> Just (k, v1)
+        _ -> Nothing
 
 dispatchCollEvent
-    :: (Eq k, Eq a)
+    :: (Eq k)
     => Event (MapCollEvent k a)
     -> SignalGen (Collection k (Discrete a))
 dispatchCollEvent mapcollE = do
-    let f (MCChange k a) = Just (k, a)
-        f _ = Nothing
-    changeEv <- memoE $ justE (f <$> mapcollE)
-    let g (MCNew k a) = Just $
-            AddItem k <$> followCollItem a k changeEv
-        g (MCRemove k) = Just $ return $ RemoveItem k
-        g (MCChange _ _) = Nothing
-    updateEv <- generatorE $ justE (g <$> mapcollE)
+    let f (MCNew k a) = Just $
+            AddItem k <$> discreteForKey k a mapcollE
+        f (MCRemove k) = Just $ return $ RemoveItem k
+        f (MCChange _ _) = Nothing
+    updateEv <- generatorE $ justE (f <$> mapcollE)
     genericAccumCollection updateEv
 
-followCollItem :: (Eq k) => a -> k
-               -> Event (k, a)
-               -> SignalGen (Discrete a)
-followCollItem val k1 ev = stepperD val (justE (f <$> ev))
-  where f (k2, v) | k1 == k2 = Just v
-                  | otherwise = Nothing
+discreteForKey :: Eq k => k -> a -> Event (MapCollEvent k a) -> SignalGen (Discrete a)
+discreteForKey targetKey v0 mapcollE =
+    stepperD v0 $ justE $ relevantValue <$> mapcollE
+  where
+    relevantValue collEvent = case collEvent of
+        MCChange k v | k == targetKey -> Just v
+        _ -> Nothing
 
 -------------------------------------------------------------------------------
 
