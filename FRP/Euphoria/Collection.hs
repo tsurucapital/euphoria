@@ -210,6 +210,21 @@ accumCollection ev = do
     listD <- memoD $ EnumMap.toList <$> mapping
     makeCollection listD ev
 
+-- Adding elemenets is faster than "accumCollection", but deleting them is
+-- slower. Note that the semantics differ in the case of adding the same
+-- key multiple times. "accumCollection" replaces, whereas
+-- "genericAccumCollection" allows multiple copies.
+genericAccumCollection
+    :: (Eq k)
+    => Event (CollectionUpdate k a)
+    -> SignalGen (Collection k a)
+genericAccumCollection ev = do
+    let toMapOp update = case update of
+            AddItem k a   -> (:) (k, a)
+            RemoveItem k1 -> filter (\(k2, _) -> k1 /= k2)
+    listD <- memoD =<< accumD [] (toMapOp <$> ev)
+    makeCollection listD ev
+
 -- | The primitive interface for creating a 'Collection'. The two
 -- arguments must be coherent, i.e. the value of the discrete at
 -- time /t+1/ should be obtained by applying the updates
@@ -279,10 +294,30 @@ stepListCollState xs (initialK, existingMap) = ((k', newMap'), removeUpdates ++ 
         (\(k, em, upds) x -> (succ k, EnumMap.insert k x em, upds ++ [AddItem k x]))
         (initialK, newMap, []) newItems
 
+-------------------------------------------------------------------------------
+-- Converting Discrete Maps into Collections
+
 data MapCollEvent k a
     = MCNew k a
     | MCChange k a
     | MCRemove k
+
+-- | Turns mapping of values into a collection of first-class FRP
+-- values that are updated. If items are added to the EnumMap, then
+-- they will be added to the Collection. Likewise, if they are removed
+-- from the mapping, they will be removed from the collection. Keys
+-- that are present in both but have new values will have their
+-- Discrete value updated, and keys with values that are still present
+-- will not have their Discrete values updated.
+mapToCollection :: forall k a.
+                  (Enum k, Eq k, Eq a)
+                => Discrete (EnumMap k a)
+                -> SignalGen (Collection k (Discrete a))
+mapToCollection mapD = do
+    m1 <- delayD EnumMap.empty mapD
+    let collDiffs :: Discrete [MapCollEvent k a]
+        collDiffs = mapCollDiff <$> m1 <*> mapD
+    dispatchCollEvent . flattenE =<< preservesD collDiffs
 
 mapCollDiff :: (Enum k, Eq a) => EnumMap k a -> EnumMap k a -> [MapCollEvent k a]
 mapCollDiff prevmap newmap = newEvs ++ removeEvs ++ changeEvs
@@ -302,9 +337,10 @@ mapCollDiff prevmap newmap = newEvs ++ removeEvs ++ changeEvs
     removeEvs = map makeRemove (EnumMap.toList removedStuff)
     changeEvs = map makeChange changedStuff
 
-dispatchCollEvent :: (Enum k, Eq k, Eq a)
-                  => Event (MapCollEvent k a)
-                  -> SignalGen (Collection k (Discrete a))
+dispatchCollEvent
+    :: (Eq k, Eq a)
+    => Event (MapCollEvent k a)
+    -> SignalGen (Collection k (Discrete a))
 dispatchCollEvent mapcollE = do
     let f (MCChange k a) = Just (k, a)
         f _ = Nothing
@@ -314,7 +350,7 @@ dispatchCollEvent mapcollE = do
         g (MCRemove k) = Just $ return $ RemoveItem k
         g (MCChange _ _) = Nothing
     updateEv <- generatorE $ justE (g <$> mapcollE)
-    accumCollection updateEv
+    genericAccumCollection updateEv
 
 followCollItem :: (Eq k) => a -> k
                -> Event (k, a)
@@ -323,22 +359,7 @@ followCollItem val k1 ev = stepperD val (justE (f <$> ev))
   where f (k2, v) | k1 == k2 = Just v
                   | otherwise = Nothing
 
--- | Turns mapping of values into a collection of first-class FRP
--- values that are updated. If items are added to the EnumMap, then
--- they will be added to the Collection. Likewise, if they are removed
--- from the mapping, they will be removed from the collection. Keys
--- that are present in both but have new values will have their
--- Discrete value updated, and keys with values that are still present
--- will not have their Discrete values updated.
-mapToCollection :: forall k a.
-                  (Enum k, Eq k, Eq a)
-                => Discrete (EnumMap k a)
-                -> SignalGen (Collection k (Discrete a))
-mapToCollection mapD = do
-    m1 <- delayD EnumMap.empty mapD
-    let collDiffs :: Discrete [MapCollEvent k a]
-        collDiffs = mapCollDiff <$> m1 <*> mapD
-    dispatchCollEvent . flattenE =<< preservesD collDiffs
+-------------------------------------------------------------------------------
 
 -- | Look for a key in a collection, and give its (potentially
 -- nonexistant) value over time.
