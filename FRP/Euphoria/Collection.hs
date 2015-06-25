@@ -23,8 +23,10 @@ module FRP.Euphoria.Collection
 , emptyCollection
 , collectionFromList
 , collectionFromDiscreteList
-, mapToCollection
 , makeCollection
+, mapToCollection
+, enummapToCollection
+, hashmapToCollection
 -- * observing collections
 , watchCollection
 , followCollectionKey
@@ -39,15 +41,24 @@ module FRP.Euphoria.Collection
 , sequenceCollection
 ) where
 
-import Control.Applicative
+
+#if __GLASGOW_HASKELL__ < 710
+import Control.Applicative ((<$>), (<*>), (<$), pure)
+import Data.Foldable (Foldable)
+import Data.Monoid (mappend, mempty)
+import Data.Traversable (Traversable, sequenceA)
+#endif
+
 import Control.Monad (join)
 import Data.EnumMap.Lazy (EnumMap)
 import qualified Data.EnumMap.Lazy as EnumMap
+import Data.Hashable (Hashable)
+import Data.HashMap.Strict (HashMap)
+import qualified Data.HashMap.Strict as HMS
 import Data.List
+import Data.Map (Map)
+import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
-import Data.Traversable
-import Data.Foldable (Foldable)
-import Data.Monoid
 
 import FRP.Euphoria.Event
 
@@ -297,13 +308,32 @@ stepListCollState xs (initialK, existingMap) = ((k', newMap'), removeUpdates ++ 
 -------------------------------------------------------------------------------
 -- Converting Discrete Maps into Collections
 
-mapToCollection :: forall k a.
-                  (Enum k, Eq k, Eq a)
-                => Discrete (EnumMap k a)
-                -> SignalGen (Collection k (Discrete a))
-mapToCollection mapD =
+mapToCollection
+    :: (Eq k, Eq a, Ord k)
+    => Discrete (Map k a)
+    -> SignalGen (Collection k (Discrete a))
+mapToCollection =
+    genericMapToCollection Map.empty $
+        diffMaps (Map.\\) Map.intersection Map.lookup Map.toList
+
+enummapToCollection
+    :: (Eq k, Eq a, Enum k)
+    => Discrete (EnumMap k a)
+    -> SignalGen (Collection k (Discrete a))
+enummapToCollection =
     genericMapToCollection EnumMap.empty $
         diffMaps (EnumMap.\\) EnumMap.intersection EnumMap.lookup EnumMap.toList
+
+hashmapToCollection
+    :: (Eq k, Eq a, Hashable k)
+    => Discrete (HashMap k a)
+    -> SignalGen (Collection k (Discrete a))
+hashmapToCollection =
+    genericMapToCollection HMS.empty $
+        diffMaps HMS.difference HMS.intersection HMS.lookup HMS.toList
+
+-- Generic implementation
+--------------------------
 
 data MapCollEvent k a
     = MCNew k a
