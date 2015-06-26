@@ -41,18 +41,18 @@ module FRP.Euphoria.Collection
 , sequenceCollection
 ) where
 
+import Prelude hiding (lookup)
 import Control.Monad (join)
 import Data.EnumMap.Lazy (EnumMap)
 import qualified Data.EnumMap.Lazy as EnumMap
 import Data.Hashable (Hashable)
 import Data.HashMap.Strict (HashMap)
-import qualified Data.HashMap.Strict as HMS
-import Data.List
+import Data.List hiding (insert, lookup)
 import Data.Map (Map)
-import qualified Data.Map as Map
 import Data.Maybe (mapMaybe)
 
 import FRP.Euphoria.Event
+import qualified FRP.Euphoria.Internal.Maplike as M
 
 
 -- | Represents an incremental change to a collection of items.
@@ -304,25 +304,19 @@ mapToCollection
     :: (Eq k, Eq a, Ord k)
     => Discrete (Map k a)
     -> SignalGen (Collection k (Discrete a))
-mapToCollection =
-    genericMapToCollection Map.empty $
-        diffMaps (Map.\\) Map.intersection Map.lookup Map.toList
+mapToCollection = genericMapToCollection
 
 enummapToCollection
     :: (Eq k, Eq a, Enum k)
     => Discrete (EnumMap k a)
     -> SignalGen (Collection k (Discrete a))
-enummapToCollection =
-    genericMapToCollection EnumMap.empty $
-        diffMaps (EnumMap.\\) EnumMap.intersection EnumMap.lookup EnumMap.toList
+enummapToCollection = genericMapToCollection
 
 hashmapToCollection
     :: (Eq k, Eq a, Hashable k)
     => Discrete (HashMap k a)
     -> SignalGen (Collection k (Discrete a))
-hashmapToCollection =
-    genericMapToCollection HMS.empty $
-        diffMaps HMS.difference HMS.intersection HMS.lookup HMS.toList
+hashmapToCollection = genericMapToCollection
 
 -- Generic implementation
 --------------------------
@@ -340,13 +334,11 @@ data MapCollEvent k a
 -- Discrete value updated, and keys with values that are still present
 -- will not have their Discrete values updated.
 genericMapToCollection
-    :: forall c k a. (Eq k)
-    => c k a                                  -- ^ Empty map
-    -> (c k a -> c k a -> [MapCollEvent k a]) -- ^ Function for diffing maps
-    -> Discrete (c k a)                       -- ^ A discrete of maps
+    :: forall c k a. (Eq k, Eq a, M.Maplike c k)
+    => Discrete (c k a)
     -> SignalGen (Collection k (Discrete a))
-genericMapToCollection emptyMap diffFn mapD = do
-    m1 <- delayD emptyMap mapD
+genericMapToCollection mapD = do
+    m1 <- delayD M.empty mapD
     let collDiffs :: Discrete [MapCollEvent k a]
         collDiffs = diffFn <$> m1 <*> mapD
     dispatchCollEvent . flattenE =<< preservesD collDiffs
@@ -354,23 +346,21 @@ genericMapToCollection emptyMap diffFn mapD = do
 -- | Given a pair of generic maps, compute a sequence of "MapCollEvent"s
 -- which would transform the first into the second.
 diffMaps
-    :: (Eq a)
-    => (c k a -> c k a -> c k a) -- ^ Difference
-    -> (c k a -> c k a -> c k a) -- ^ Intersection
-    -> (k -> c k a -> Maybe a)   -- ^ Lookup
-    -> (c k a -> [(k, a)])       -- ^ To list
-    -> c k a -> c k a -> [MapCollEvent k a]
-diffMaps difference intersection mapLookup toList prevmap newmap = concat
+    :: (Eq a, M.Maplike c k)
+    => c k a
+    -> c k a
+    -> [MapCollEvent k a]
+diffMaps prevmap newmap = concat
     [ map (uncurry MCNew   ) newStuff
     , map (MCRemove . fst  ) removedStuff
     , map (uncurry MCChange) changedStuff
     ]
   where
-    newStuff     = toList $ newmap `difference` prevmap
-    removedStuff = toList $ prevmap `difference` newmap
-    keptStuff    = toList $ newmap `intersection` prevmap
+    newStuff     = M.toList $ newmap `M.difference` prevmap
+    removedStuff = M.toList $ prevmap `M.difference` newmap
+    keptStuff    = M.toList $ newmap `M.intersection` prevmap
     changedStuff = mapMaybe justChanges keptStuff
-    justChanges (k, v1) = case mapLookup k prevmap of
+    justChanges (k, v1) = case M.lookup k prevmap of
         Just v2 | v1 /= v2  -> Just (k, v1)
         _ -> Nothing
 
