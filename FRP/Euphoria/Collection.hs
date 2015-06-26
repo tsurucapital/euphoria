@@ -23,8 +23,10 @@ module FRP.Euphoria.Collection
 , emptyCollection
 , collectionFromList
 , collectionFromDiscreteList
-, mapToCollection
 , makeCollection
+, mapToCollection
+, enummapToCollection
+, hashmapToCollection
 -- * observing collections
 , watchCollection
 , followCollectionKey
@@ -39,17 +41,19 @@ module FRP.Euphoria.Collection
 , sequenceCollection
 ) where
 
-import Control.Applicative
+import Prelude hiding (lookup)
 import Control.Monad (join)
 import Data.EnumMap.Lazy (EnumMap)
 import qualified Data.EnumMap.Lazy as EnumMap
-import Data.List
+import Data.Hashable (Hashable)
+import Data.HashMap.Strict (HashMap)
+import Data.List hiding (insert, lookup)
+import Data.Map (Map)
 import Data.Maybe (mapMaybe)
-import Data.Traversable
-import Data.Foldable (Foldable)
-import Data.Monoid
+import Data.Proxy (Proxy(..))
 
 import FRP.Euphoria.Event
+import qualified FRP.Euphoria.Internal.Maplike as M
 
 
 -- | Represents an incremental change to a collection of items.
@@ -197,17 +201,30 @@ simpleCollectionUpdates initialK evs = do
         updateAddItem (k, a, _) = AddItem k a
     memoE $ (updateAddItem <$> newEvents) `mappend` (RemoveItem <$> removalEvent)
 
--- Turns adds the necessary state for holding the existing [(k, a)]
--- and creating the unique Event stream for each change of the
--- collection.
-accumCollection :: (Enum k)
-                => Event (CollectionUpdate k a)
-                -> SignalGen (Collection k a)
-accumCollection ev = do
-    let toMapOp (AddItem k a) = EnumMap.insert k a
-        toMapOp (RemoveItem k) = EnumMap.delete k
-    mapping <- accumD EnumMap.empty (toMapOp <$> ev)
-    listD <- memoD $ EnumMap.toList <$> mapping
+-- Adds the necessary state for holding the existing [(k, a)] and creating
+-- the unique Event stream for each change of the collection.
+accumCollection
+    :: (Enum k)
+    => Event (CollectionUpdate k a)
+    -> SignalGen (Collection k a)
+accumCollection =
+    genericAccumCollection (Proxy :: Proxy (EnumMap k))
+
+-- | Like "accumCollection", but uses any "Maplike" to maintain the
+-- internal state. This allows the user accumulate collections in the
+-- context of a wider variety of key constrints. The caller must specify
+-- the desired underyling "Maplike" type by providing a "Proxy".
+genericAccumCollection
+    :: forall c k a. (M.Maplike c k)
+    => Proxy (c k)
+    -> Event (CollectionUpdate k a)
+    -> SignalGen (Collection k a)
+genericAccumCollection _ ev = do
+    let toMapOp :: CollectionUpdate k a -> c k a -> c k a
+        toMapOp (AddItem k a) = M.insert k a
+        toMapOp (RemoveItem k) = M.delete k
+    mapping <- accumD M.empty (toMapOp <$> ev)
+    listD <- memoD $ M.toList <$> mapping
     makeCollection listD ev
 
 -- | The primitive interface for creating a 'Collection'. The two
@@ -279,49 +296,34 @@ stepListCollState xs (initialK, existingMap) = ((k', newMap'), removeUpdates ++ 
         (\(k, em, upds) x -> (succ k, EnumMap.insert k x em, upds ++ [AddItem k x]))
         (initialK, newMap, []) newItems
 
+-------------------------------------------------------------------------------
+-- Converting Discrete Maps into Collections
+
+mapToCollection
+    :: (Eq k, Eq a, Ord k)
+    => Discrete (Map k a)
+    -> SignalGen (Collection k (Discrete a))
+mapToCollection = genericMapToCollection
+
+enummapToCollection
+    :: (Eq k, Eq a, Enum k)
+    => Discrete (EnumMap k a)
+    -> SignalGen (Collection k (Discrete a))
+enummapToCollection = genericMapToCollection
+
+hashmapToCollection
+    :: (Eq k, Eq a, Hashable k)
+    => Discrete (HashMap k a)
+    -> SignalGen (Collection k (Discrete a))
+hashmapToCollection = genericMapToCollection
+
+-- Generic implementation
+--------------------------
+
 data MapCollEvent k a
     = MCNew k a
     | MCChange k a
     | MCRemove k
-
-mapCollDiff :: (Enum k, Eq a) => EnumMap k a -> EnumMap k a -> [MapCollEvent k a]
-mapCollDiff prevmap newmap = newEvs ++ removeEvs ++ changeEvs
-  where
-    newStuff = newmap EnumMap.\\ prevmap
-    removedStuff = prevmap EnumMap.\\ newmap
-    keptStuff = newmap `EnumMap.intersection` prevmap
-    changedStuff = mapMaybe f (EnumMap.toList keptStuff)
-      where f (k, v1) = case EnumMap.lookup k prevmap of
-                Nothing -> Nothing
-                Just v2 | v1 /= v2 -> Just (k, v1)
-                        | otherwise -> Nothing
-    makeNew (k, v) = MCNew k v
-    makeRemove (k, _) = MCRemove k
-    makeChange (k, v) = MCChange k v
-    newEvs = map makeNew (EnumMap.toList newStuff)
-    removeEvs = map makeRemove (EnumMap.toList removedStuff)
-    changeEvs = map makeChange changedStuff
-
-dispatchCollEvent :: (Enum k, Eq k, Eq a)
-                  => Event (MapCollEvent k a)
-                  -> SignalGen (Collection k (Discrete a))
-dispatchCollEvent mapcollE = do
-    let f (MCChange k a) = Just (k, a)
-        f _ = Nothing
-    changeEv <- memoE $ justE (f <$> mapcollE)
-    let g (MCNew k a) = Just $
-            AddItem k <$> followCollItem a k changeEv
-        g (MCRemove k) = Just $ return $ RemoveItem k
-        g (MCChange _ _) = Nothing
-    updateEv <- generatorE $ justE (g <$> mapcollE)
-    accumCollection updateEv
-
-followCollItem :: (Eq k) => a -> k
-               -> Event (k, a)
-               -> SignalGen (Discrete a)
-followCollItem val k1 ev = stepperD val (justE (f <$> ev))
-  where f (k2, v) | k1 == k2 = Just v
-                  | otherwise = Nothing
 
 -- | Turns mapping of values into a collection of first-class FRP
 -- values that are updated. If items are added to the EnumMap, then
@@ -330,15 +332,59 @@ followCollItem val k1 ev = stepperD val (justE (f <$> ev))
 -- that are present in both but have new values will have their
 -- Discrete value updated, and keys with values that are still present
 -- will not have their Discrete values updated.
-mapToCollection :: forall k a.
-                  (Enum k, Eq k, Eq a)
-                => Discrete (EnumMap k a)
-                -> SignalGen (Collection k (Discrete a))
-mapToCollection mapD = do
-    m1 <- delayD EnumMap.empty mapD
-    let collDiffs :: Discrete [MapCollEvent k a]
-        collDiffs = mapCollDiff <$> m1 <*> mapD
-    dispatchCollEvent . flattenE =<< preservesD collDiffs
+genericMapToCollection
+    :: forall c k a. (Eq k, Eq a, M.Maplike c k)
+    => Discrete (c k a)
+    -> SignalGen (Collection k (Discrete a))
+genericMapToCollection mapD = do
+    m0 <- delayD M.empty mapD
+    let diffsD = diffMaps <$> m0 <*> mapD
+    diffsE <- flattenE <$> preservesD diffsD
+    dispatchCollEvent (Proxy :: Proxy (c k)) diffsE
+
+-- | Given a pair of generic maps, compute a sequence of "MapCollEvent"s
+-- which would transform the first into the second.
+diffMaps
+    :: (Eq a, M.Maplike c k)
+    => c k a
+    -> c k a
+    -> [MapCollEvent k a]
+diffMaps prevmap newmap = concat
+    [ map (uncurry MCNew   ) newStuff
+    , map (MCRemove . fst  ) removedStuff
+    , map (uncurry MCChange) changedStuff
+    ]
+  where
+    newStuff     = M.toList $ newmap `M.difference` prevmap
+    removedStuff = M.toList $ prevmap `M.difference` newmap
+    keptStuff    = M.toList $ newmap `M.intersection` prevmap
+    changedStuff = mapMaybe justChanges keptStuff
+    justChanges (k, v1) = case M.lookup k prevmap of
+        Just v2 | v1 /= v2  -> Just (k, v1)
+        _ -> Nothing
+
+dispatchCollEvent
+    :: (Eq k, M.Maplike c k)
+    => Proxy (c k)
+    -> Event (MapCollEvent k a)
+    -> SignalGen (Collection k (Discrete a))
+dispatchCollEvent mapProxy mapcollE = do
+    let f (MCNew k a) = Just $
+            AddItem k <$> discreteForKey k a mapcollE
+        f (MCRemove k) = Just $ return $ RemoveItem k
+        f (MCChange _ _) = Nothing
+    updateEv <- generatorE $ justE (f <$> mapcollE)
+    genericAccumCollection mapProxy updateEv
+
+discreteForKey :: Eq k => k -> a -> Event (MapCollEvent k a) -> SignalGen (Discrete a)
+discreteForKey targetKey v0 mapcollE =
+    stepperD v0 $ justE $ relevantValue <$> mapcollE
+  where
+    relevantValue collEvent = case collEvent of
+        MCChange k v | k == targetKey -> Just v
+        _ -> Nothing
+
+-------------------------------------------------------------------------------
 
 -- | Look for a key in a collection, and give its (potentially
 -- nonexistant) value over time.
