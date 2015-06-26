@@ -50,6 +50,7 @@ import Data.HashMap.Strict (HashMap)
 import Data.List hiding (insert, lookup)
 import Data.Map (Map)
 import Data.Maybe (mapMaybe)
+import Data.Proxy (Proxy(..))
 
 import FRP.Euphoria.Event
 import qualified FRP.Euphoria.Internal.Maplike as M
@@ -200,32 +201,30 @@ simpleCollectionUpdates initialK evs = do
         updateAddItem (k, a, _) = AddItem k a
     memoE $ (updateAddItem <$> newEvents) `mappend` (RemoveItem <$> removalEvent)
 
--- Turns adds the necessary state for holding the existing [(k, a)]
--- and creating the unique Event stream for each change of the
--- collection.
-accumCollection :: (Enum k)
-                => Event (CollectionUpdate k a)
-                -> SignalGen (Collection k a)
-accumCollection ev = do
-    let toMapOp (AddItem k a) = EnumMap.insert k a
-        toMapOp (RemoveItem k) = EnumMap.delete k
-    mapping <- accumD EnumMap.empty (toMapOp <$> ev)
-    listD <- memoD $ EnumMap.toList <$> mapping
-    makeCollection listD ev
-
--- Adding elemenets is faster than "accumCollection", but deleting them is
--- slower. Note that the semantics differ in the case of adding the same
--- key multiple times. "accumCollection" replaces, whereas
--- "genericAccumCollection" allows multiple copies.
-genericAccumCollection
-    :: (Eq k)
+-- Adds the necessary state for holding the existing [(k, a)] and creating
+-- the unique Event stream for each change of the collection.
+accumCollection
+    :: (Enum k)
     => Event (CollectionUpdate k a)
     -> SignalGen (Collection k a)
-genericAccumCollection ev = do
-    let toMapOp update = case update of
-            AddItem k a   -> (:) (k, a)
-            RemoveItem k1 -> filter (\(k2, _) -> k1 /= k2)
-    listD <- memoD =<< accumD [] (toMapOp <$> ev)
+accumCollection =
+    genericAccumCollection (Proxy :: Proxy (EnumMap k))
+
+-- | Like "accumCollection", but uses any "Maplike" to maintain the
+-- internal state. This allows the user accumulate collections in the
+-- context of a wider variety of key constrints. The caller must specify
+-- the desired underyling "Maplike" type by providing a "Proxy".
+genericAccumCollection
+    :: forall c k a. (M.Maplike c k)
+    => Proxy (c k)
+    -> Event (CollectionUpdate k a)
+    -> SignalGen (Collection k a)
+genericAccumCollection _ ev = do
+    let toMapOp :: CollectionUpdate k a -> c k a -> c k a
+        toMapOp (AddItem k a) = M.insert k a
+        toMapOp (RemoveItem k) = M.delete k
+    mapping <- accumD M.empty (toMapOp <$> ev)
+    listD <- memoD $ M.toList <$> mapping
     makeCollection listD ev
 
 -- | The primitive interface for creating a 'Collection'. The two
@@ -338,10 +337,10 @@ genericMapToCollection
     => Discrete (c k a)
     -> SignalGen (Collection k (Discrete a))
 genericMapToCollection mapD = do
-    m1 <- delayD M.empty mapD
-    let collDiffs :: Discrete [MapCollEvent k a]
-        collDiffs = diffFn <$> m1 <*> mapD
-    dispatchCollEvent . flattenE =<< preservesD collDiffs
+    m0 <- delayD M.empty mapD
+    let diffsD = diffMaps <$> m0 <*> mapD
+    diffsE <- flattenE <$> preservesD diffsD
+    dispatchCollEvent (Proxy :: Proxy (c k)) diffsE
 
 -- | Given a pair of generic maps, compute a sequence of "MapCollEvent"s
 -- which would transform the first into the second.
@@ -365,16 +364,17 @@ diffMaps prevmap newmap = concat
         _ -> Nothing
 
 dispatchCollEvent
-    :: (Eq k)
-    => Event (MapCollEvent k a)
+    :: (Eq k, M.Maplike c k)
+    => Proxy (c k)
+    -> Event (MapCollEvent k a)
     -> SignalGen (Collection k (Discrete a))
-dispatchCollEvent mapcollE = do
+dispatchCollEvent mapProxy mapcollE = do
     let f (MCNew k a) = Just $
             AddItem k <$> discreteForKey k a mapcollE
         f (MCRemove k) = Just $ return $ RemoveItem k
         f (MCChange _ _) = Nothing
     updateEv <- generatorE $ justE (f <$> mapcollE)
-    genericAccumCollection updateEv
+    genericAccumCollection mapProxy updateEv
 
 discreteForKey :: Eq k => k -> a -> Event (MapCollEvent k a) -> SignalGen (Discrete a)
 discreteForKey targetKey v0 mapcollE =
