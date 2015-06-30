@@ -1,4 +1,5 @@
 language: haskell
+ghc: "7.8"
 
 before_install:
   - ./.travis.install-deps $mode --constraint="bytestring installed" --force-reinstalls
@@ -16,4 +17,3 @@ env:
 
 notifications:
   email: false
-

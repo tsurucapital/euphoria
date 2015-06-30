@@ -4,13 +4,9 @@
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS_GHC -Wall #-}
 
-#if __GLASGOW_HASKELL__ <= 706
-{-# LANGUAGE DoRec #-}
-#else
-{-# LANGUAGE RecursiveDo #-}
-#endif
 
 -- | Collection signals with incremental updates.
 module FRP.Euphoria.Collection
