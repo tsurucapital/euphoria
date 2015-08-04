@@ -95,7 +95,7 @@ stepperUpdate :: a -> Event a -> Update a
 stepperUpdate initial aE = fromMaybe initial <$> updateUseLast aE
 
 -- | > discreteToUpdate d = fmap updateUseLast (preservesD d)
-discreteToUpdate :: Discrete a -> SignalGen (Update (Maybe a))
+discreteToUpdate :: MonadSignalGen m => Discrete a -> m (Update (Maybe a))
 discreteToUpdate aD = updateUseLast <$> preservesD aD
 
 -- | Do the same thing as 'updateUseAll' but use (>>) in place of mappend.
@@ -117,7 +117,7 @@ instance (Monoid a) => SignalSet (Update a) where
         dynUpdatesE <- mapEIO mkDynUpdates updatesE
         dynUpdatesD <- stepperD undefined dynUpdatesE
         dynE <- switchD dynUpdatesD
-        initial <- execute newDynUpdateState
+        initial <- liftSignalGen $ execute newDynUpdateState
         return $ Update (applyDynUpdates initial) dynE
         where
             applyDynUpdates initial (Dual (Endo f)) = case f initial of

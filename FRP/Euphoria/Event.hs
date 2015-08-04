@@ -125,6 +125,7 @@ import Control.Applicative
 import Control.DeepSeq
 import Control.Monad (join, replicateM)
 import Control.Monad.Fix
+import Control.Monad.IO.Class
 import Data.Default
 import Data.Either (partitionEithers, lefts, rights)
 import Data.List (foldl')
@@ -133,7 +134,7 @@ import Data.Maybe
 import Data.Typeable
 import Debug.Trace
 import FRP.Euphoria.Signal
-import FRP.Elerea.Simple (transfer, externalMulti, effectful1, until, stateful)
+import FRP.Elerea.Simple (externalMulti, effectful1, until, stateful)
 import Prelude hiding (until)
 
 -- | @Event a@ represents a stream of events whose occurrences carry
@@ -180,10 +181,10 @@ instance Apply Signal Event where
 --instance Apply Discrete Event where
 
 -- | Create an event that can be triggered as an IO action.
-externalEvent :: IO (SignalGen (Event a), a -> IO ())
-externalEvent = do
+externalEvent :: (MonadSignalGen g, MonadIO m, MonadIO m') => m (g (Event a), a -> m' ())
+externalEvent = liftIO $ do
   (gen, trigger) <- externalMulti
-  return (Event . fmap reverse <$> gen, trigger)
+  return (Event . fmap reverse <$> liftSignalGen gen, liftIO . trigger)
 
 -- | Transform an event stream using a time-varying transformation function.
 --
@@ -197,8 +198,8 @@ filterE cond (Event evt) = Event $ filter cond <$> evt
 
 -- | @stepperS initial evt@ returns a signal whose value is the last occurrence
 -- of @evt@, or @initial@ if there has been none.
-stepperS :: a -> Event a -> SignalGen (Signal a)
-stepperS initial (Event evt) = transfer initial upd evt
+stepperS :: MonadSignalGen m => a -> Event a -> m (Signal a)
+stepperS initial (Event evt) = transferS initial upd evt
   where
     upd [] old = old
     upd occs _ = last occs
@@ -209,7 +210,7 @@ eachStep :: Signal a -> Event a
 eachStep = Event . fmap (:[])
 
 -- | 'Discrete' version of eachStep.
-eachStepD :: Discrete a -> SignalGen (Event a)
+eachStepD :: MonadSignalGen m => Discrete a -> m (Event a)
 eachStepD d = do
   sig <- discreteToSignal d
   return $ eachStep sig
@@ -225,16 +226,16 @@ eachStepD d = do
 --   so far, as follows:
 --
 -- > accumS 0 $ (+) <$> nums
-accumS :: a -> Event (a -> a) -> SignalGen (Signal a)
-accumS initial (Event evt) = transfer initial upd evt
+accumS :: MonadSignalGen m => a -> Event (a -> a) -> m (Signal a)
+accumS initial (Event evt) = transferS initial upd evt
   where
     upd occs old = foldl' (flip ($)) old occs
 
 -- | @accumS@ with side-effecting updates.
-accumSIO :: a -> Event (a -> IO a) -> SignalGen (Signal a)
+accumSIO :: (MonadSignalGen m) => a -> Event (a -> IO a) -> m (Signal a)
 accumSIO initial (Event evt) = mfix $ \self -> do
   prev <- delayS initial self
-  effectful1 id $ update <$> prev <*> evt
+  liftSignalGen $ effectful1 id $ update <$> prev <*> evt
   where
     update prev upds = foldl' (>>=) (return prev) upds
 
@@ -242,7 +243,7 @@ accumSIO initial (Event evt) = mfix $ \self -> do
 -- It returns an event which occurs every time an update happens.
 -- The resulting event, once created, will have the same number of
 -- occurrences as @evt@ each step.
-accumE :: a -> Event (a -> a) -> SignalGen (Event a)
+accumE :: (MonadSignalGen m) => a -> Event (a -> a) -> m (Event a)
 accumE initial (Event evt) = fmap Event $ do
   (_, occs) <- mfix $ \ ~(self, _) -> do
     prev <- delayS initial self
@@ -251,13 +252,13 @@ accumE initial (Event evt) = fmap Event $ do
   return occs
 
 -- | A useful special case of 'accumE'.
-scanAccumE :: s -> Event (s -> (s, a)) -> SignalGen (Event a)
+scanAccumE :: MonadSignalGen m => s -> Event (s -> (s, a)) -> m (Event a)
 scanAccumE initial ev = (snd <$>) <$> accumE (initial, undefined) (f <$> ev)
   where
     f fn (s, _) = fn s
 
 -- | Monadic version of @accumE@.
-accumEM :: s -> Event (s -> SignalGen s) -> SignalGen (Event s)
+accumEM :: (MonadSignalGen m) => s -> Event (s -> SignalGen s) -> m (Event s)
 accumEM initial (Event evt) = fmap Event $ do
   rec
     prevState <- delayS initial (fst <$> state_out)
@@ -271,13 +272,13 @@ accumEM initial (Event evt) = fmap Event $ do
     end val history = return (val, reverse history)
 
 -- | A useful special case of @accumEM@.
-scanAccumEM :: s -> Event (s -> SignalGen (s, a)) -> SignalGen (Event a)
+scanAccumEM :: MonadSignalGen m => s -> Event (s -> SignalGen (s, a)) -> m (Event a)
 scanAccumEM initial ev = (snd <$>) <$> accumEM (initial, undefined) (f <$> ev)
   where
     f fn (s, _) = fn s
 
 -- | Drops all events in this network step
-dropStepE :: Event a -> SignalGen (Event a)
+dropStepE :: MonadSignalGen m => Event a -> m (Event a)
 dropStepE ev = do
     initial <- delayS True (pure False)
     memoE $ justE $ discardIf <$> initial <@> ev
@@ -298,11 +299,11 @@ expandE (Event evt) = Event $ f <$> evt
         f xs = [xs]
 
 -- | Like 'mapM' over events.
-mapEIO :: (t -> IO a) -> Event t -> SignalGen (Event a)
-mapEIO mkAction (Event evt) = Event <$> effectful1 (mapM mkAction) evt
+mapEIO :: MonadSignalGen m => (t -> IO a) -> Event t -> m (Event a)
+mapEIO mkAction (Event evt) = Event <$> liftSignalGen (effectful1 (mapM mkAction) evt)
 
 -- | Memoization of events. See the doc for 'FRP.Elerea.Simple.memo'.
-memoE :: Event a -> SignalGen (Event a)
+memoE :: MonadSignalGen m => Event a -> m (Event a)
 memoE (Event evt) = Event <$> memoS evt
 
 -- | An event whose occurrences come from different event stream
@@ -322,12 +323,12 @@ mapMaybeE f evt = justE $ f <$> evt
 
 -- | @onCreation x@ creates an event that occurs only once,
 -- immediately on creation.
-onCreation :: a -> SignalGen (Event a)
+onCreation :: MonadSignalGen m => a -> m (Event a)
 onCreation x = Event <$> delayS [x] (return [])
 
 -- | @delayE evt@ creates an event whose occurrences are
 -- same as the occurrences of @evt@ in the previous step.
-delayE :: Event a -> SignalGen (Event a)
+delayE :: MonadSignalGen m => Event a -> m (Event a)
 delayE (Event x) = Event <$> delayS [] x
 
 -- | @withPrevE initial evt@ is an Event which occurs every time
@@ -335,19 +336,19 @@ delayE (Event x) = Event <$> delayS [] x
 -- is the value of the current occurrence of @evt@, and whose second
 -- element is the value of the previous occurrence of @evt@, or
 -- @initial@ if there has been none.
-withPrevE :: a -> Event a -> SignalGen (Event (a, a))
+withPrevE :: MonadSignalGen m => a -> Event a -> m (Event (a, a))
 withPrevE initial evt = accumE (initial, undefined) $ toUpd <$> evt
   where
     toUpd val (new, _old) = (val, new)
 
 -- | @generatorE evt@ creates a subnetwork every time @evt@ occurs.
-generatorE :: Event (SignalGen a) -> SignalGen (Event a)
+generatorE :: MonadSignalGen m => Event (SignalGen a) -> m (Event a)
 generatorE (Event evt) = Event <$> generatorS (sequence <$> evt)
 
 -- | @dropE n evt@ returns an event, which behaves similarly to
 -- @evt@ except that its first @n@ occurrences are dropped.
-dropE :: Int -> Event a -> SignalGen (Event a)
-dropE n (Event evt) = Event . fmap fst <$> transfer ([], n) upd evt
+dropE :: MonadSignalGen m => Int -> Event a -> m (Event a)
+dropE n (Event evt) = Event . fmap fst <$> transferS ([], n) upd evt
     where
         upd occs (_, k)
             | k <= 0 = (occs, 0)
@@ -358,8 +359,8 @@ dropE n (Event evt) = Event . fmap fst <$> transfer ([], n) upd evt
 -- | @dropWhileE p evt@ returns an event, which behaves similarly to
 -- @evt@ except that all its occurrences before the first one
 -- that satisfies @p@ are dropped.
-dropWhileE :: (a -> Bool) -> Event a -> SignalGen (Event a)
-dropWhileE p (Event evt) = Event . fmap fst <$> transfer ([], False) upd evt
+dropWhileE :: MonadSignalGen m => (a -> Bool) -> Event a -> m (Event a)
+dropWhileE p (Event evt) = Event . fmap fst <$> transferS ([], False) upd evt
   where
     upd occs (_, True) = (occs, True)
     upd occs (_, False) = case span p occs of
@@ -369,11 +370,11 @@ dropWhileE p (Event evt) = Event . fmap fst <$> transfer ([], False) upd evt
 -- | Take the first n occurrences of the event and discard the rest.
 -- It drops the reference to the original event after
 -- the first n occurrences are seen.
-takeE :: Int -> Event a -> SignalGen (Event a)
+takeE :: MonadSignalGen m => Int -> Event a -> m (Event a)
 takeE n evt = generalPrefixE (primTakeE n) evt
 
-primTakeE :: Int -> Signal [a] -> SignalGen (Signal (Bool, [a]))
-primTakeE n evt = fmap fst <$> transfer ((True, []), n) upd evt
+primTakeE :: MonadSignalGen m => Int -> Signal [a] -> m (Signal (Bool, [a]))
+primTakeE n evt = fmap fst <$> transferS ((True, []), n) upd evt
     where
         upd occs (_, k) = ((k > 0, take k occs), k')
             where
@@ -382,10 +383,10 @@ primTakeE n evt = fmap fst <$> transfer ((True, []), n) upd evt
 -- | Take the first occurrences satisfying the predicate and discard the rest.
 -- It drops the reference to the original event after
 -- the first non-satisfying occurrence is seen.
-takeWhileE :: (a -> Bool) -> Event a -> SignalGen (Event a)
+takeWhileE :: MonadSignalGen m => (a -> Bool) -> Event a -> m (Event a)
 takeWhileE p evt = generalPrefixE (primTakeWhileE p) evt
 
-primTakeWhileE :: (a -> Bool) -> Signal [a] -> SignalGen (Signal (Bool, [a]))
+primTakeWhileE :: MonadSignalGen m => (a -> Bool) -> Signal [a] -> m (Signal (Bool, [a]))
 primTakeWhileE p evt = memoS $ f <$> evt
     where
         f occs = case span p occs of
@@ -393,14 +394,15 @@ primTakeWhileE p evt = memoS $ f <$> evt
           (end, _) -> (False, end)
 
 generalPrefixE
-  :: (Signal [a] -> SignalGen (Signal (Bool, [a])))
+  :: MonadSignalGen m
+  => (Signal [a] -> m (Signal (Bool, [a])))
   -> Event a
-  -> SignalGen (Event a)
+  -> m (Event a)
 generalPrefixE prefixTaker (Event evt) = do
     rec
-        done <- until $ not . fst <$> active_occs
+        done <- liftSignalGen $ until $ not . fst <$> active_occs
         prevDone <- delayS False done
-        eventSource <- transfer evt upd prevDone
+        eventSource <- transferS evt upd prevDone
         active_occs <- prefixTaker (join eventSource)
     Event <$> memoS (snd <$> active_occs)
     where
@@ -421,7 +423,7 @@ generalPrefixE prefixTaker (Event evt) = do
 
 -- | Split a stream of 'Either's into two, based on tags. This needs to be
 -- in SignalGen in order to memoise the intermediate result.
-partitionEithersE :: Event (Either a b) -> SignalGen (Event a, Event b)
+partitionEithersE :: MonadSignalGen m => Event (Either a b) -> m (Event a, Event b)
 partitionEithersE (Event eithersS) = (Event . fmap fst &&& Event . fmap snd)
   <$> memoS (partitionEithers <$> eithersS)
 
@@ -436,14 +438,14 @@ rightE (Event eithersS) = Event (rights <$> eithersS)
 -- | @groupByE eqv evt@ creates a stream of event streams, each corresponding
 -- to a span of consecutive occurrences of equivalent elements in the original
 -- stream. Equivalence is tested using @eqv@.
-groupByE :: (a -> a -> Bool) -> Event a -> SignalGen (Event (Event a))
+groupByE :: MonadSignalGen m => (a -> a -> Bool) -> Event a -> m (Event (Event a))
 groupByE eqv sourceEvt = fmap snd <$> groupWithInitialByE eqv sourceEvt
 
 -- | @groupWithInitialByE eqv evt@ creates a stream of event streams, each corresponding
 -- to a span of consecutive occurrences of equivalent elements in the original
 -- stream. Equivalence is tested using @eqv@. In addition, each outer event
 -- occurrence contains the first occurrence of its inner event.
-groupWithInitialByE :: (a -> a -> Bool) -> Event a -> SignalGen (Event (a, Event a))
+groupWithInitialByE :: MonadSignalGen m => (a -> a -> Bool) -> Event a -> m (Event (a, Event a))
 groupWithInitialByE eqv sourceEvt = do
     networkE <- justE <$> scanAccumE Nothing (makeNetwork <$> sourceEvt)
     generatorE networkE
@@ -454,17 +456,17 @@ groupWithInitialByE eqv sourceEvt = do
         network val = takeWhileE (eqv val) =<< dropWhileE (not . eqv val) sourceEvt
 
 -- | Same as @'groupByE' (==)@
-groupE :: (Eq a) => Event a -> SignalGen (Event (Event a))
+groupE :: (Eq a, MonadSignalGen m) => Event a -> m (Event (Event a))
 groupE = groupByE (==)
 
 -- | Same as @groupWithInitialByE (==)@
-groupWithInitialE :: (Eq a) => Event a -> SignalGen (Event (a, Event a))
+groupWithInitialE :: (Eq a, MonadSignalGen m) => Event a -> m (Event (a, Event a))
 groupWithInitialE = groupWithInitialByE (==)
 
 -- | For each Event () received, emit all 'a' in a list since the last
 -- Event () was received. In the case of simultaneous 'a' and '()' in
 -- a step, the 'a' are included in the emitted list.
-splitOnE :: Event () -> Event a -> SignalGen (Event [a])
+splitOnE :: MonadSignalGen m => Event () -> Event a -> m (Event [a])
 splitOnE completeE aE = do
     let inE = (Right <$> aE) `mappend` (Left <$> completeE)
     let f (Left ()) accAs = ([], Just (reverse accAs))
@@ -495,50 +497,50 @@ changesD (Discrete dis) = Event $ conv <$> dis
 
 -- | Like 'changesD', but uses the current value in the Discrete even if
 -- it is not new.
-preservesD :: Discrete a -> SignalGen (Event a)
+preservesD :: MonadSignalGen m => Discrete a -> m (Event a)
 preservesD dis = do
     ev <- onCreation ()
     sig <- discreteToSignal dis
     memoE $ (const <$> sig <@> ev) `mappend` changesD dis
 
 -- | @snapshotD dis@ returns the current value of @dis@.
-snapshotD :: Discrete a -> SignalGen a
+snapshotD :: MonadSignalGen m => Discrete a -> m a
 -- Seems to cause problems with the network. Is the underlying
 -- 'snapshot' actually safe?
 snapshotD (Discrete a) = snd <$> snapshotS a
 
 -- | Like 'stepperS', but creates a 'Discrete'.
-stepperD :: a -> Event a -> SignalGen (Discrete a)
-stepperD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
+stepperD :: MonadSignalGen m => a -> Event a -> m (Discrete a)
+stepperD initial (Event evt) = Discrete <$> transferS (False, initial) upd evt
   where
     upd [] (_, old) = (False, old)
     upd occs _ = (True, last occs)
 
 -- | Use a 'Default' instance to supply the initial value.
-stepperDefD :: (Default a) => Event a -> SignalGen (Discrete a)
+stepperDefD :: (Default a, MonadSignalGen m) => Event a -> m (Discrete a)
 stepperDefD = stepperD def
 
 -- | Use 'Nothing' to supply the initial value, and wrap the returned
 -- type in 'Maybe'.
-stepperMaybeD :: Event a -> SignalGen (Discrete (Maybe a))
+stepperMaybeD :: MonadSignalGen m => Event a -> m (Discrete (Maybe a))
 stepperMaybeD ev = stepperDefD (Just <$> ev)
 
 -- | Given an initial value, filter out the Nothings.
-justD :: a -> Discrete (Maybe a) -> SignalGen (Discrete a)
+justD :: MonadSignalGen m => a -> Discrete (Maybe a) -> m (Discrete a)
 justD initial mD = do
     mE <- preservesD mD
     stepperD initial (justE mE)
 
 -- | Like @accumS@, but creates a 'Discrete'.
-accumD :: a -> Event (a -> a) -> SignalGen (Discrete a)
-accumD initial (Event evt) = Discrete <$> transfer (False, initial) upd evt
+accumD :: MonadSignalGen m => a -> Event (a -> a) -> m (Discrete a)
+accumD initial (Event evt) = Discrete <$> transferS (False, initial) upd evt
   where
     upd [] (_, old) = (False, old)
     upd upds (_, old) = (True, new)
       where !new = foldl' (flip ($)) old upds
 
 -- | Filter events to only those which are different than the previous event.
-differentE :: (Eq a) => Event a -> SignalGen (Event a)
+differentE :: (Eq a, MonadSignalGen m) => Event a -> m (Event a)
 differentE ev = (justE . (f <$>)) <$> withPrevE Nothing (Just <$> ev)
   where
     f :: (Eq a) => (Maybe a, Maybe a) -> Maybe a
@@ -561,16 +563,16 @@ instance Monad Discrete where
     return (new, r)
 
 -- | Memoization of discretes. See the doc for 'FRP.Elerea.Simple.memo'.
-memoD :: Discrete a -> SignalGen (Discrete a)
+memoD :: MonadSignalGen m => Discrete a -> m (Discrete a)
 memoD (Discrete dis) = Discrete <$> memoS dis
 
 -- | Like 'delayS'.
-delayD :: a -> Discrete a -> SignalGen (Discrete a)
+delayD :: MonadSignalGen m => a -> Discrete a -> m (Discrete a)
 delayD initial (Discrete subsequent) = Discrete <$> delayS (True, initial) subsequent
 
 -- | Like 'generatorS'. A subnetwork is only created when the value of the
 -- discrete may have changed.
-generatorD :: Discrete (SignalGen a) -> SignalGen (Discrete a)
+generatorD :: MonadSignalGen m => Discrete (SignalGen a) -> m (Discrete a)
 generatorD (Discrete sig) = do
     first <- delayS True $ pure False
     listResult <- generatorS $ networkOnChanges <$> first <*> sig
@@ -583,50 +585,50 @@ generatorD (Discrete sig) = do
 -- | Executes a dynamic 'SignalGen' in a convenient way.
 --
 -- > generatorD' dis = generatorD dis >>= switchD
-generatorD' :: (SignalSet s) => Discrete (SignalGen s) -> SignalGen s
+generatorD' :: (MonadSignalGen m, SignalSet s) => Discrete (SignalGen s) -> m s
 generatorD' dis = generatorD dis >>= switchD
 
 -- | @minimizeChanges dis@ creates a Discrete whose value is same as @dis@.
 -- The resulting discrete is considered changed only if it is really changed.
-minimizeChanges :: (Eq a) => Discrete a -> SignalGen (Discrete a)
-minimizeChanges (Discrete dis) = Discrete . fmap fromJust <$> transfer Nothing upd dis
+minimizeChanges :: (MonadSignalGen m, Eq a) => Discrete a -> m (Discrete a)
+minimizeChanges (Discrete dis) = Discrete . fmap fromJust <$> transferS Nothing upd dis
   where
     upd (False, _) (Just (_, cache)) = Just (False, cache)
     upd (True, val) (Just (_, cache))
       | val == cache = Just (False, cache)
     upd (new, val) _ = Just (new, val)
 
-recordDiscrete :: Discrete a -> SignalGen (Discrete a)
-recordDiscrete (Discrete dis) = Discrete . fmap fromJust <$> transfer Nothing upd dis
+recordDiscrete :: MonadSignalGen m => Discrete a -> m (Discrete a)
+recordDiscrete (Discrete dis) = Discrete . fmap fromJust <$> transferS Nothing upd dis
   where
     upd (False, _) (Just (_, cache)) = Just (False, cache)
     upd new_val _ = Just new_val
 
 -- | Converts a 'Discrete' to an equivalent 'Signal'.
-discreteToSignal :: Discrete a -> SignalGen (Signal a)
+discreteToSignal :: MonadSignalGen m => Discrete a -> m (Signal a)
 discreteToSignal dis = discreteToSignalNoMemo <$> recordDiscrete dis
 
 -- | @switchD dis@ creates some signal-like thing whose value is
 -- same as the thing @dis@ currently contains.
-switchD :: (SignalSet s) => Discrete s -> SignalGen s
+switchD :: (SignalSet s, MonadSignalGen m) => Discrete s -> m s
 switchD dis = recordDiscrete dis >>= basicSwitchD >>= memoizeSignalSet
 
 -- | @switchDS@ selects current @Signal a@ of a 'Discrete'.
--- 
+--
 -- See @switchD@ for a more general function.
-switchDS :: Discrete (Signal a) -> SignalGen (Signal a)
+switchDS :: MonadSignalGen m => Discrete (Signal a) -> m (Signal a)
 switchDS = switchD
 
 -- | @switchDE@ selects the current 'Event' stream contained in a 'Discrete'
 --
 -- See @switchD@ for a more general function.
-switchDE :: Discrete (Event a) -> SignalGen (Event a)
+switchDE :: MonadSignalGen m => Discrete (Event a) -> m (Event a)
 switchDE = switchD
 
 -- | @freezeD fixEvent dis@ returns a discrete whose value is same as
 -- @dis@ before @fixEvent@ is activated first. Its value gets fixed once
 -- an occurrence of @fixEvent@ is seen.
-freezeD :: Event () -> Discrete a -> SignalGen (Discrete a)
+freezeD :: MonadSignalGen m => Event () -> Discrete a -> m (Discrete a)
 freezeD evt dis = do
     dis' <- memoD dis
     now <- onCreation ()
@@ -662,14 +664,14 @@ traceDiscreteT loc f (Discrete sig) = Discrete $ traceSignalMaybe loc msg sig
     msg (True, val) = Just $ show (f val)
     msg (False, _) = Nothing
 
-keepJustsD :: Discrete (Maybe (Maybe a))
-           -> SignalGen (Discrete (Maybe a))
+keepJustsD :: MonadSignalGen m => Discrete (Maybe (Maybe a))
+           -> m (Discrete (Maybe a))
 keepJustsD tm = do
     emm <- preservesD tm
     stepperD Nothing (justE emm)
 
-keepDJustsD :: Discrete (Maybe (Discrete a))
-            -> SignalGen (Discrete (Maybe a))
+keepDJustsD :: MonadSignalGen m => Discrete (Maybe (Discrete a))
+            -> m (Discrete (Maybe a))
 keepDJustsD dmd =
     fmap (fmap Just) . justE <$> preservesD dmd
     >>= stepperD (return Nothing) >>= switchD
@@ -709,7 +711,7 @@ infixl 4 <~~>
 -- @('Discrete' ('Maybe' a))@, EasyApply's \<~~> will attempt to choose the
 -- right combinator. This is an experimental idea, and may be more
 -- trouble than it's worth in practice.
--- 
+--
 -- GHC will fail to find instances under various circumstances, such
 -- as when when anonymous functions are applied to tuples, so you will
 -- have to fall back to using explicit combinators.
@@ -744,19 +746,19 @@ instance EasyApply (Maybe (a -> b)) (Discrete a) (Discrete (Maybe b)) where
 -- Evaluation control
 
 -- | Forces the value in a Discrete.
-forceD :: Discrete a -> SignalGen (Discrete a)
+forceD :: MonadSignalGen m => Discrete a -> m (Discrete a)
 forceD aD = generatorD $ (\x -> x `seq` return x) <$> aD
 
 -- | Like forceD, but for Event.
-forceE :: Event a -> SignalGen (Event a)
+forceE :: MonadSignalGen m => Event a -> m (Event a)
 forceE aE = generatorE $ (\x -> x `seq` return x) <$> aE
 
 -- | Completely evaluates the value in a Discrete.
-rnfD :: (NFData a) => Discrete a -> SignalGen (Discrete a)
+rnfD :: (NFData a, MonadSignalGen m) => Discrete a -> m (Discrete a)
 rnfD = forceD . fmap force
 
 -- | Like rnfD, but for Event.
-rnfE :: (NFData a) => Event a -> SignalGen (Event a)
+rnfE :: (NFData a, MonadSignalGen m) => Event a -> m (Event a)
 rnfE = forceE . fmap force
 
 #if !MIN_VERSION_deepseq(1,2,0)
@@ -772,9 +774,9 @@ force x = x `deepseq` x
 class SignalSet a where
     -- | Create a dynamically switched @a@. The returned value doesn't need
     -- to be properly memoized. The user should call `switchD` instead.
-    basicSwitchD :: Discrete a -> SignalGen a
+    basicSwitchD :: MonadSignalGen m => Discrete a -> m a
     -- | Memoize a signal set.
-    memoizeSignalSet :: a -> SignalGen a
+    memoizeSignalSet :: MonadSignalGen m => a -> m a
 
 instance SignalSet (Signal a) where
     basicSwitchD dis = return $ join $ discreteToSignalNoMemo dis

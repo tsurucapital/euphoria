@@ -118,11 +118,11 @@ instance SignalSet (Collection k a) where
     memoizeSignalSet (Collection dis)= Collection <$> memoD dis
 
 -- | Like 'fmap', but the Collection and interior 'Event' stream are memoized
-mapCollection :: (a -> b) -> Collection k a -> SignalGen (Collection k b)
+mapCollection :: MonadSignalGen m => (a -> b) -> Collection k a -> m (Collection k b)
 mapCollection = mapCollectionWithKey . const
 
 -- | A version of 'mapCollection' which provides access to the key
-mapCollectionWithKey :: (k -> a -> b) -> Collection k a -> SignalGen (Collection k b)
+mapCollectionWithKey :: MonadSignalGen m => (k -> a -> b) -> Collection k a -> m (Collection k b)
 mapCollectionWithKey f aC = do
     updateE    <- snd <$> openCollection aC
     newCurD    <- memoD $ fmap (fmap ft . fst) $ unCollection aC
@@ -134,16 +134,16 @@ mapCollectionWithKey f aC = do
     fcu (AddItem k x)  = AddItem k (f k x)
     fcu (RemoveItem k) = RemoveItem k
 
-filterCollection :: (Enum k) => (a -> Bool) -> Collection k a -> SignalGen (Collection k a)
+filterCollection :: (Enum k, MonadSignalGen m) => (a -> Bool) -> Collection k a -> m (Collection k a)
 filterCollection = filterCollectionWithKey . const
 
-filterCollectionWithKey :: forall k a. (Enum k) => (k -> a -> Bool) -> Collection k a -> SignalGen (Collection k a)
+filterCollectionWithKey :: forall m k a. (Enum k, MonadSignalGen m) => (k -> a -> Bool) -> Collection k a -> m (Collection k a)
 filterCollectionWithKey f aC = mapCollectionWithKey f' aC >>= justCollection where
     f' k v
         | f k v = Just v
         | otherwise = Nothing
 
-justCollection :: forall k a. (Enum k) => Collection k (Maybe a) -> SignalGen (Collection k a)
+justCollection :: forall m k a. (Enum k, MonadSignalGen m) => Collection k (Maybe a) -> m (Collection k a)
 -- Inefficient, quick-hack implementation
 justCollection c = do
     upds <- collectionToUpdates c
@@ -159,8 +159,9 @@ justCollection c = do
 -- | Create an 'Event' stream of all updates from a collection, including
 -- the items currently in it.
 collectionToUpdates
-    :: forall k a. Collection k a
-    -> SignalGen (Event (CollectionUpdate k a))
+    :: forall m k a. MonadSignalGen m
+    => Collection k a
+    -> m (Event (CollectionUpdate k a))
 collectionToUpdates aC = do
     (cur,updateE) <- openCollection aC
     initE  <- onCreation (map (uncurry AddItem) cur)
@@ -168,16 +169,16 @@ collectionToUpdates aC = do
     return (updateE `mappend` initE')
 
 sequenceCollection
-    :: Enum k
+    :: (Enum k, MonadSignalGen m)
     => Collection k (SignalGen a)
-    -> SignalGen (Collection k a)
+    -> m (Collection k a)
 sequenceCollection col = collectionToUpdates col
   >>= generatorE . fmap sequenceA
   >>= accumCollection
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
-simpleCollection :: (Enum k)
+simpleCollection :: (Enum k, MonadSignalGen m)
                  => k
                  -- ^ The initial value for the unique keys. 'succ'
                  -- will be used to get further keys.
@@ -185,13 +186,13 @@ simpleCollection :: (Enum k)
                  -- ^ An Event that introduces a new item and its
                  -- subsequent removal Event. The item will be removed
                  -- from the collection when the Event () fires.
-                 -> SignalGen (Collection k a)
+                 -> m (Collection k a)
 simpleCollection initialK evs =
     simpleCollectionUpdates initialK evs >>= accumCollection
 
-simpleCollectionUpdates :: (Enum k) => k
+simpleCollectionUpdates :: (Enum k, MonadSignalGen m) => k
                         -> Event (a, Event ())
-                        -> SignalGen (Event (CollectionUpdate k a))
+                        -> m (Event (CollectionUpdate k a))
 simpleCollectionUpdates initialK evs = do
     let addKey (a, ev) k = (succ k, (k, a, ev))
     newEvents <- scanAccumE initialK (addKey <$> evs)
@@ -209,9 +210,9 @@ simpleCollectionUpdates initialK evs = do
 -- Adds the necessary state for holding the existing [(k, a)] and creating
 -- the unique Event stream for each change of the collection.
 accumCollection
-    :: (Enum k)
+    :: (Enum k, MonadSignalGen m)
     => Event (CollectionUpdate k a)
-    -> SignalGen (Collection k a)
+    -> m (Collection k a)
 accumCollection =
     genericAccumCollection (Proxy :: Proxy (EnumMap k))
 
@@ -220,10 +221,10 @@ accumCollection =
 -- context of a wider variety of key constrints. The caller must specify
 -- the desired underyling "Maplike" type by providing a "Proxy".
 genericAccumCollection
-    :: forall c k a. (M.Maplike c k)
+    :: forall m c k a. (M.Maplike c k, MonadSignalGen m)
     => Proxy (c k)
     -> Event (CollectionUpdate k a)
-    -> SignalGen (Collection k a)
+    -> m (Collection k a)
 genericAccumCollection _ ev = do
     let toMapOp :: CollectionUpdate k a -> c k a -> c k a
         toMapOp (AddItem k a) = M.insert k a
@@ -238,9 +239,10 @@ genericAccumCollection _ ev = do
 -- at /t+1/ to the value of the discrete at /t/. This invariant
 -- is not checked.
 makeCollection
-    :: Discrete [(k, a)]
+    :: MonadSignalGen m
+    => Discrete [(k, a)]
     -> Event (CollectionUpdate k a)
-    -> SignalGen (Collection k a)
+    -> m (Collection k a)
 makeCollection listD updE = Collection <$> generatorD (gen <$> listD)
     where
         gen list = do
@@ -248,8 +250,8 @@ makeCollection listD updE = Collection <$> generatorD (gen <$> listD)
             return (list, updE')
 
 -- | Prints add/remove diagnostics for a Collection. Useful for debugging
-watchCollection :: (Show k, Show a)
-                => Collection k a -> SignalGen (Event (IO ()))
+watchCollection :: (Show k, Show a, MonadSignalGen m)
+                => Collection k a -> m (Event (IO ()))
 watchCollection (Collection coll) = do
     ev1 <- takeE 1 =<< preservesD coll
     now <- onCreation ()
@@ -273,10 +275,10 @@ collectionFromList kvs = Collection $ pure (kvs, mempty)
 -- items into a Collection. Probably should only be used for temporary
 -- hacks. Will perform badly with large lists.
 collectionFromDiscreteList
-    :: (Enum k, Eq a)
+    :: (Enum k, Eq a, MonadSignalGen m)
     => k
     -> Discrete [a]
-    -> SignalGen (Collection k a)
+    -> m (Collection k a)
 collectionFromDiscreteList initialK valsD = do
     valsE <- preservesD valsD
     evs <- scanAccumE (initialK, EnumMap.empty) (stepListCollState <$> valsE)
@@ -305,21 +307,21 @@ stepListCollState xs (initialK, existingMap) = ((k', newMap'), removeUpdates ++ 
 -- Converting Discrete Maps into Collections
 
 mapToCollection
-    :: (Eq k, Eq a, Ord k)
+    :: (Eq k, Eq a, Ord k, MonadSignalGen m)
     => Discrete (Map k a)
-    -> SignalGen (Collection k (Discrete a))
+    -> m (Collection k (Discrete a))
 mapToCollection = genericMapToCollection
 
 enummapToCollection
-    :: (Eq k, Eq a, Enum k)
+    :: (Eq k, Eq a, Enum k, MonadSignalGen m)
     => Discrete (EnumMap k a)
-    -> SignalGen (Collection k (Discrete a))
+    -> m (Collection k (Discrete a))
 enummapToCollection = genericMapToCollection
 
 hashmapToCollection
-    :: (Eq k, Eq a, Hashable k)
+    :: (Eq k, Eq a, Hashable k, MonadSignalGen m)
     => Discrete (HashMap k a)
-    -> SignalGen (Collection k (Discrete a))
+    -> m (Collection k (Discrete a))
 hashmapToCollection = genericMapToCollection
 
 -- Generic implementation
@@ -338,9 +340,9 @@ data MapCollEvent k a
 -- Discrete value updated, and keys with values that are still present
 -- will not have their Discrete values updated.
 genericMapToCollection
-    :: forall c k a. (Eq k, Eq a, M.Maplike c k)
+    :: forall c m k a. (Eq k, Eq a, M.Maplike c k, MonadSignalGen m)
     => Discrete (c k a)
-    -> SignalGen (Collection k (Discrete a))
+    -> m (Collection k (Discrete a))
 genericMapToCollection mapD = do
     m0 <- delayD M.empty mapD
     let diffsD = diffMaps <$> m0 <*> mapD
@@ -369,10 +371,10 @@ diffMaps prevmap newmap = concat
         _ -> Nothing
 
 dispatchCollEvent
-    :: (Eq k, M.Maplike c k)
+    :: (Eq k, M.Maplike c k, MonadSignalGen m)
     => Proxy (c k)
     -> Event (MapCollEvent k a)
-    -> SignalGen (Collection k (Discrete a))
+    -> m (Collection k (Discrete a))
 dispatchCollEvent mapProxy mapcollE = do
     let f (MCNew k a) = Just $
             AddItem k <$> discreteForKey k a mapcollE
@@ -381,7 +383,7 @@ dispatchCollEvent mapProxy mapcollE = do
     updateEv <- generatorE $ justE (f <$> mapcollE)
     genericAccumCollection mapProxy updateEv
 
-discreteForKey :: Eq k => k -> a -> Event (MapCollEvent k a) -> SignalGen (Discrete a)
+discreteForKey :: (Eq k, MonadSignalGen m) => k -> a -> Event (MapCollEvent k a) -> m (Discrete a)
 discreteForKey targetKey v0 mapcollE =
     stepperD v0 $ justE $ relevantValue <$> mapcollE
   where
@@ -393,19 +395,19 @@ discreteForKey targetKey v0 mapcollE =
 
 -- | Look for a key in a collection, and give its (potentially
 -- nonexistant) value over time.
-followCollectionKey :: forall k a. (Eq k)
+followCollectionKey :: forall m k a. (Eq k, MonadSignalGen m)
                     => k
                     -> Collection k a
-                    -> SignalGen (Discrete (Maybe a))
+                    -> m (Discrete (Maybe a))
 followCollectionKey k (Collection coll) = do
     collAsNow <- takeE 1 =<< preservesD coll
-        :: SignalGen (Event ([(k, a)], Event (CollectionUpdate k a)))
+        :: m (Event ([(k, a)], Event (CollectionUpdate k a)))
     let existing :: Event (CollectionUpdate k a)
         existing = flattenE $ initialAdds . fst <$> collAsNow
         further :: Event (Event (CollectionUpdate k a))
         further  = snd <$> collAsNow
     further' <- switchD =<< stepperD mempty further
-        :: SignalGen (Event (CollectionUpdate k a))
+        :: m (Event (CollectionUpdate k a))
     accumMatchingItem (== k) (existing `mappend` further')
 
 -- Turn the existing items into AddItems for our state accumulation
@@ -414,10 +416,10 @@ initialAdds = map (uncurry AddItem)
 
 -- Accumulate CollectionUpdates, and keep the newest value whose key
 -- is True for the given function.
-accumMatchingItem :: forall k a.
+accumMatchingItem :: forall m k a. MonadSignalGen m =>
                   (k -> Bool)
                   -> Event (CollectionUpdate k a)
-                  -> SignalGen (Discrete (Maybe a))
+                  -> m (Discrete (Maybe a))
 accumMatchingItem f updateE =
     stepperD Nothing $ justE (g <$> updateE)
   where
@@ -434,5 +436,5 @@ collectionToDiscreteList = fmap fst . unCollection
 
 -- | Extracts a snapshot of the current values in a collection with
 -- an 'Event' stream of further updates
-openCollection :: Collection k a -> SignalGen ([(k,a)], Event (CollectionUpdate k a))
+openCollection :: MonadSignalGen m => Collection k a -> m ([(k,a)], Event (CollectionUpdate k a))
 openCollection = snapshotD . unCollection
