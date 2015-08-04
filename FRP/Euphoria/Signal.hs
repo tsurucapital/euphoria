@@ -30,7 +30,6 @@ import Control.Monad.Trans.Writer.Strict as Strict
 import Control.Monad.Trans.State.Strict as Strict
 import Control.Monad.Trans.RWS.Strict as Strict
 import Control.Monad.Trans.Except
-import Control.Monad.Trans.Error
 
 import Control.Monad.Trans.Class (lift)
 
