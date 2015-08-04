@@ -84,6 +84,7 @@ library
                      , hashable >= 1.2
                      , containers >= 0.5.5
                      , unordered-containers >= 0.2.5
+                     , transformers >= 0.4.1
 
 test-suite tests
   type:           exitcode-stdio-1.0
