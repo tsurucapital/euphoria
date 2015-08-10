@@ -71,7 +71,6 @@ module FRP.Euphoria.Event
 
 -- ** Accumulation
 , stepperD
-, stepperDefD
 , stepperMaybeD
 , justD
 , accumD
@@ -126,7 +125,6 @@ import Control.DeepSeq
 import Control.Monad (join, replicateM)
 import Control.Monad.Fix
 import Control.Monad.IO.Class
-import Data.Default
 import Data.Either (partitionEithers, lefts, rights)
 import Data.List (foldl')
 import Data.Monoid
@@ -516,14 +514,10 @@ stepperD initial (Event evt) = Discrete <$> transferS (False, initial) upd evt
     upd [] (_, old) = (False, old)
     upd occs _ = (True, last occs)
 
--- | Use a 'Default' instance to supply the initial value.
-stepperDefD :: (Default a, MonadSignalGen m) => Event a -> m (Discrete a)
-stepperDefD = stepperD def
-
 -- | Use 'Nothing' to supply the initial value, and wrap the returned
 -- type in 'Maybe'.
 stepperMaybeD :: MonadSignalGen m => Event a -> m (Discrete (Maybe a))
-stepperMaybeD ev = stepperDefD (Just <$> ev)
+stepperMaybeD ev = stepperD Nothing (Just <$> ev)
 
 -- | Given an initial value, filter out the Nothings.
 justD :: MonadSignalGen m => a -> Discrete (Maybe a) -> m (Discrete a)
