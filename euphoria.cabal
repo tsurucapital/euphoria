@@ -78,7 +78,6 @@ library
   build-depends:       HUnit
                      , base >= 4.7 && < 4.9
                      , elerea >= 2.7
-                     , data-default
                      , enummapset-th >= 0.6
                      , deepseq
                      , hashable >= 1.2
