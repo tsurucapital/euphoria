@@ -73,7 +73,15 @@ source-repository head
   location: git://github.com/tsurucapital/euphoria.git
 
 library
-  exposed-modules:     FRP.Euphoria.Event, FRP.Euphoria.Signal, FRP.Euphoria.Update, FRP.Euphoria.Collection, FRP.Euphoria.Abbrev, FRP.Euphoria.Internal.Maplike
+  exposed-modules:     FRP.Euphoria.Event
+                     , FRP.Euphoria.Signal
+                     , FRP.Euphoria.Update
+                     , FRP.Euphoria.Collection
+                     , FRP.Euphoria.Collection.Enum
+                     , FRP.Euphoria.Collection.Generic
+                     , FRP.Euphoria.Collection.Hashable
+                     , FRP.Euphoria.Abbrev
+                     , FRP.Euphoria.Internal.Maplike
   -- other-modules:
   build-depends:       HUnit
                      , base >= 4.7 && < 4.9
