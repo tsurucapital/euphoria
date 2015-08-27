@@ -6,10 +6,12 @@ module FRP.Euphoria.Collection.Hashable
     ( CollectionUpdate (..)
     , Collection
     -- * creating collections
+    , simpleCollection
     , accumCollection
     , collectionToUpdates
     , emptyCollection
     , collectionFromList
+    , collectionFromDiscreteList
     , makeCollection
     , mapToCollection
     -- * observing collections
@@ -32,7 +34,8 @@ import Data.Proxy (Proxy(..))
 
 import FRP.Euphoria.Collection.Generic hiding (filterCollection
         , filterCollectionWithKey, justCollection, sequenceCollection
-        , accumCollection, mapToCollection)
+        , accumCollection, mapToCollection, simpleCollection
+        , collectionFromDiscreteList)
 import qualified FRP.Euphoria.Collection.Generic as Gen
 import FRP.Euphoria.Event
 
@@ -81,3 +84,19 @@ mapToCollection
     -> m (Collection k (Discrete a))
 mapToCollection =
     Gen.mapToCollection
+
+simpleCollection
+    :: (Enum k, Eq k, Hashable k, MonadSignalGen m)
+    => k
+    -> Event (a, Event ())
+    -> m (Collection k a)
+simpleCollection =
+    Gen.simpleCollection (Proxy :: Proxy (HashMap k))
+
+collectionFromDiscreteList
+    :: (Enum k, Eq k, Hashable k, Eq a, MonadSignalGen m)
+    => k
+    -> Discrete [a]
+    -> m (Collection k a)
+collectionFromDiscreteList =
+    Gen.collectionFromDiscreteList (Proxy :: Proxy (HashMap k))

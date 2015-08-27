@@ -26,6 +26,7 @@ class Maplike c k where
     delete :: k -> c k v -> c k v
     delete k m =  m `difference` singleton k (error "bug")
     toList :: c k v -> [(k, v)]
+    foldrWithKey :: (k -> v -> a -> a) -> a -> c k v -> a
 
 instance Ord k => Maplike Map.Map k where
     union        = Map.union
@@ -37,6 +38,7 @@ instance Ord k => Maplike Map.Map k where
     insert       = Map.insert
     delete       = Map.delete
     toList       = Map.toList
+    foldrWithKey = Map.foldrWithKey
 
 instance Enum k => Maplike EML.EnumMap k where
     union        = EML.union
@@ -48,6 +50,7 @@ instance Enum k => Maplike EML.EnumMap k where
     insert       = EML.insert
     delete       = EML.delete
     toList       = EML.toList
+    foldrWithKey = EML.foldrWithKey
 
 instance (Eq k, Hashable k) => Maplike HMS.HashMap k where
     union        = HMS.union
@@ -59,3 +62,4 @@ instance (Eq k, Hashable k) => Maplike HMS.HashMap k where
     insert       = HMS.insert
     delete       = HMS.delete
     toList       = HMS.toList
+    foldrWithKey = HMS.foldrWithKey

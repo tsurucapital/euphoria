@@ -3,6 +3,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE RecursiveDo #-}
 {-# OPTIONS_GHC -Wall #-}
 
 -- | Collection signals with incremental updates.
@@ -20,10 +21,12 @@ module FRP.Euphoria.Collection.Generic
     ( CollectionUpdate (..)
     , Collection
     -- * creating collections
+    , simpleCollection
     , accumCollection
     , collectionToUpdates
     , emptyCollection
     , collectionFromList
+    , collectionFromDiscreteList
     , makeCollection
     , mapToCollection
     -- * observing collections
@@ -50,6 +53,7 @@ import Data.Traversable (Traversable, sequenceA)
 #endif
 
 import Control.Monad (join)
+import qualified Data.List as List
 import Data.Maybe (mapMaybe)
 import Data.Proxy (Proxy(..))
 
@@ -182,6 +186,41 @@ sequenceCollection p col = collectionToUpdates col
     >>= generatorE . fmap sequenceA
     >>= accumCollection p
 
+-- | A collection whose items are created by an event, and removed by
+-- another event.
+simpleCollection
+    :: (M.Maplike c k, Enum k, MonadSignalGen m)
+    => Proxy (c k)
+    -> k                    -- ^ The initial value for the unique keys.
+                            -- 'succ' will be used to get further keys.
+    -> Event (a, Event ())  -- ^ An Event that introduces a new item and
+                            -- its subsequent removal Event. The item will
+                            -- be removed from the collection when the
+                            -- Event () fires.
+    -> m (Collection k a)
+simpleCollection p initialK evs =
+    simpleCollectionUpdates p initialK evs >>= accumCollection p
+
+simpleCollectionUpdates
+    :: forall m c k a. (M.Maplike c k, Enum k, MonadSignalGen m)
+    => Proxy (c k)
+    -> k
+    -> Event (a, Event ())
+    -> m (Event (CollectionUpdate k a))
+simpleCollectionUpdates _ initialK evs = do
+    let addKey (a, ev) k = (succ k, (k, a, ev))
+    newEvents <- scanAccumE initialK (addKey <$> evs)
+    let addItem (k, _a, ev) = M.insert k ev
+    rec
+        removalEvent' <- delayE removalEvent
+        removalEvents <- accumD (M.empty :: c k (Event ()))
+            ((addItem <$> newEvents) `mappend` (M.delete <$> removalEvent'))
+        removalEvent <- switchD $ M.foldrWithKey
+            (\k ev ev' -> (k <$ ev) `mappend` ev') mempty <$> removalEvents
+    let updateAddItem :: (k, a, Event ()) -> CollectionUpdate k a
+        updateAddItem (k, a, _) = AddItem k a
+    memoE $ (updateAddItem <$> newEvents) `mappend` (RemoveItem <$> removalEvent)
+
 -- Adds the necessary state for holding the existing [(k, a)] and creating
 -- the unique Event stream for each change of the collection.
 accumCollection
@@ -234,6 +273,42 @@ emptyCollection = collectionFromList []
 -- collection will never change.
 collectionFromList :: [(k, a)] -> Collection k a
 collectionFromList kvs = Collection $ pure (kvs, mempty)
+
+-- | A somewhat inefficient but easy-to-use way of turning a list of
+-- items into a Collection. Probably should only be used for temporary
+-- hacks. Will perform badly with large lists.
+collectionFromDiscreteList
+    :: forall m c k a. (M.Maplike c k, Enum k, Eq a, MonadSignalGen m)
+    => Proxy (c k)
+    -> k
+    -> Discrete [a]
+    -> m (Collection k a)
+collectionFromDiscreteList p initialK valsD = do
+    valsE <- preservesD valsD
+    evs <- scanAccumE (initialK, M.empty :: c k a) (stepListCollState <$> valsE)
+    accumCollection p (flattenE evs)
+
+-- This could obviously be implemented more efficiently.
+stepListCollState
+    :: (M.Maplike c k, Enum k, Eq a)
+    => [a]
+    -> (k, c k a)
+    -> ((k, c k a), [CollectionUpdate k a])
+stepListCollState xs (initialK, existingMap) =
+    ((k', newMap'), removeUpdates ++ addUpdates)
+  where
+    keyvals = M.toList existingMap
+    newItems = xs List.\\ map snd keyvals
+    removedKeys = map fst $ List.deleteFirstsBy
+        (\(_, x) (_, y) -> x == y)
+        keyvals
+        (map (\x -> (initialK, x)) xs)
+    (newMap, removeUpdates) = foldl
+        (\(em, upds) k -> (M.delete k em, upds ++ [RemoveItem k]))
+        (existingMap, []) removedKeys
+    (k', newMap', addUpdates) = foldl
+        (\(k, em, upds) x -> (succ k, M.insert k x em, upds ++ [AddItem k x]))
+        (initialK, newMap, []) newItems
 
 -------------------------------------------------------------------------------
 -- Converting Discrete Maps into Collections
