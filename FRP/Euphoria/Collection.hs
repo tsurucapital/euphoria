@@ -2,6 +2,7 @@
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
+{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE RecursiveDo #-}
@@ -60,12 +61,14 @@ import Data.Proxy (Proxy(..))
 import FRP.Euphoria.Event
 import qualified FRP.Euphoria.Internal.Maplike as M
 
+import GHC.Generics
+
 
 -- | Represents an incremental change to a collection of items.
 data CollectionUpdate k a
     = AddItem k a
     | RemoveItem k
-    deriving (Functor, Eq, Show, Foldable, Traversable)
+    deriving (Functor, Eq, Show, Foldable, Traversable, Generic)
 
 -- | An FRP interface for representing an incrementally updated
 -- collection of items. The items are identified by a unique key.
