@@ -1,6 +1,7 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Test.Collection (collectionTestGroup) where
-import Control.Applicative ((<$>), (<*>))
+module Test.Collection.Enum
+    ( tests
+    ) where
 
 import Test.Framework (Test)
 import Test.Framework.TH
@@ -8,10 +9,10 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import FRP.Euphoria.Event
-import FRP.Euphoria.Collection
+import FRP.Euphoria.Collection.Enum
 
-collectionTestGroup :: Test
-collectionTestGroup = $(testGroupGenerator)
+tests :: Test
+tests = $(testGroupGenerator)
 
 case_switchCollection :: Assertion
 case_switchCollection = do
