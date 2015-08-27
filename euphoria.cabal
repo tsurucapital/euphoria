@@ -104,3 +104,15 @@ test-suite tests
                 , test-framework
                 , test-framework-hunit
                 , test-framework-th
+
+benchmark bench
+    type:           exitcode-stdio-1.0
+    main-is:        Main.hs
+    hs-source-dirs: benchmarks
+    ghc-options:    -Wall
+    build-depends:  base
+                  , criterion
+                  , deepseq
+                  , euphoria
+                  , enummapset-th
+                  , unordered-containers
