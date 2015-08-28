@@ -106,6 +106,7 @@ updateUseAllIO ioE = unIOMonoid <$> updateUseAll (IOMonoid <$> ioE)
 mappendUpdateIO :: Monoid a => Update (IO a) -> Update (IO a) -> Update (IO a)
 mappendUpdateIO d1 d2 = unIOMonoid <$> ((IOMonoid <$> d1) `mappend` (IOMonoid <$> d2))
 {-# RULES "mappendUpdateIO/()" mappendUpdateIO = mappendUpdateIOUnit #-}
+{-# INLINE[0] mappendUpdateIO #-}
 
 -- | Do the same thing as 'mappendUpdateIO' but specialized to 'IO ()'
 mappendUpdateIOUnit :: Update (IO ()) -> Update (IO ()) -> Update (IO ())
