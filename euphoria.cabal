@@ -97,7 +97,7 @@ library
 
 test-suite tests
   type:           exitcode-stdio-1.0
-  main-is:        Tests.hs
+  main-is:        Main.hs
   hs-source-dirs: tests
   ghc-options:    -Wall
   build-depends:  HUnit

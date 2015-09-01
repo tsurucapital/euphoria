@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Test.Collection.Enum
+module FRP.Euphoria.EnumCollection.Lazy.Test
     ( tests
     ) where
 
@@ -9,7 +9,7 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import FRP.Euphoria.Event
-import FRP.Euphoria.Collection.Enum
+import FRP.Euphoria.EnumCollection.Lazy
 
 tests :: Test
 tests = $(testGroupGenerator)

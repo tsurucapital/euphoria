@@ -1,21 +1,21 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RecordWildCards #-}
 
-module FRP.Euphoria.Collection.Enum.Bench
+module FRP.Euphoria.HashCollection.Strict.Bench
     ( benchmarks
     ) where
 
 import Control.DeepSeq
 import Control.Monad
 import Criterion
-import qualified Data.EnumMap.Lazy as EML
+import qualified Data.HashMap.Strict as HMS
 import Data.List
 import FRP.Euphoria.Event
-import FRP.Euphoria.Collection.Enum
+import FRP.Euphoria.HashCollection.Strict
 import GHC.Generics
 
 benchmarks :: Benchmark
-benchmarks = env mkEnv $ \ ~e -> bgroup "Collection.Enum"
+benchmarks = env mkEnv $ \ ~e -> bgroup "HashCollection.Strict"
     [ bench "mapToCollectionSmall" $ bench_mapToCollection (smallDict e)
     , bench "mapToCollectionBig"   $ bench_mapToCollection (bigDict e)
     , bench "accumSmall"           $ bench_accum (smallUpdates e)
@@ -33,8 +33,8 @@ data BenchmarkEnv = BenchmarkEnv
     , bigList      :: [[Int]]
     , smallUpdates :: [CollectionUpdate Int Int]
     , bigUpdates   :: [CollectionUpdate Int Int]
-    , smallDict    :: EML.EnumMap Int Int
-    , bigDict      :: EML.EnumMap Int Int
+    , smallDict    :: HMS.HashMap Int Int
+    , bigDict      :: HMS.HashMap Int Int
     } deriving (Generic)
 
 instance NFData BenchmarkEnv
@@ -45,8 +45,8 @@ mkEnv = do
     let bigList = map (\i -> [1..i]) [0..100]
     let smallUpdates = map (\i -> let (v,k) = 100 `divMod` i in AddItem k v) [1..101]
     let bigUpdates = map (\i -> let (v,k) = 200 `divMod` i in AddItem k v) [1..201]
-    let smallDict = foldl' (\acc i -> let (v,k) = 100 `divMod` i in EML.insert k v acc) EML.empty [1..101]
-    let bigDict = foldl' (\acc i -> let (v,k) = 200 `divMod` i in EML.insert k v acc) EML.empty [1..201]
+    let smallDict = foldl' (\acc i -> let (v,k) = 100 `divMod` i in HMS.insert k v acc) HMS.empty [1..101]
+    let bigDict = foldl' (\acc i -> let (v,k) = 200 `divMod` i in HMS.insert k v acc) HMS.empty [1..201]
     return BenchmarkEnv{..}
 
 bench_fromList :: [[Int]] -> Benchmarkable
@@ -83,7 +83,7 @@ bench_transformAccum updates =
         coll3 <- justCollection coll2
         discreteToSignal $ collectionToDiscreteList coll3
 
-bench_mapToCollection :: EML.EnumMap Int Int -> Benchmarkable
+bench_mapToCollection :: HMS.HashMap Int Int -> Benchmarkable
 bench_mapToCollection dict =
     nfIO $ networkToList 1 $ do
         coll <- mapToCollection (pure dict)

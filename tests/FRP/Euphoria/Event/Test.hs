@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Test.Event (eventTestGroup) where
+module FRP.Euphoria.Event.Test (tests) where
 import Control.Applicative ((<$>))
 import Data.Monoid (mempty)
 
@@ -10,8 +10,8 @@ import Test.HUnit hiding (Test)
 
 import FRP.Euphoria.Event
 
-eventTestGroup :: Test
-eventTestGroup = $(testGroupGenerator)
+tests :: Test
+tests = $(testGroupGenerator)
 
 case_takeE :: Assertion
 case_takeE = do

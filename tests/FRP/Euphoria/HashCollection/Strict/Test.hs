@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Test.Collection.Hashable
+module FRP.Euphoria.HashCollection.Strict.Test
     ( tests
     ) where
 
@@ -9,7 +9,7 @@ import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import FRP.Euphoria.Event
-import FRP.Euphoria.Collection.Hashable
+import FRP.Euphoria.HashCollection.Strict
 
 tests :: Test
 tests = $(testGroupGenerator)

@@ -1,5 +1,5 @@
 {-# LANGUAGE TemplateHaskell #-}
-module Test.Update (updateTestGroup) where
+module FRP.Euphoria.Update.Test (tests) where
 import Control.Applicative ((<$>), (<*>))
 import Data.Maybe (fromMaybe)
 import Data.Monoid (mappend)
@@ -12,8 +12,8 @@ import Test.HUnit hiding (Test)
 import FRP.Euphoria.Event
 import FRP.Euphoria.Update
 
-updateTestGroup :: Test
-updateTestGroup = $(testGroupGenerator)
+tests :: Test
+tests = $(testGroupGenerator)
 
 case_startUpdateNetwork :: Assertion
 case_startUpdateNetwork = do
