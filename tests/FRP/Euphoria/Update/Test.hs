@@ -1,8 +1,14 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP #-}
+
 module FRP.Euphoria.Update.Test (tests) where
+
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>), (<*>))
-import Data.Maybe (fromMaybe)
 import Data.Monoid (mappend)
+#endif
+
+import Data.Maybe (fromMaybe)
 
 import Test.Framework (Test)
 import Test.Framework.TH

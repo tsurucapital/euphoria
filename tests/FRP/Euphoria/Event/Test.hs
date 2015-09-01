@@ -1,7 +1,12 @@
 {-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE CPP #-}
+
 module FRP.Euphoria.Event.Test (tests) where
+
+#if __GLASGOW_HASKELL__ < 710
 import Control.Applicative ((<$>))
 import Data.Monoid (mempty)
+#endif
 
 import Test.Framework (Test)
 import Test.Framework.TH
