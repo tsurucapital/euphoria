@@ -1,9 +1,9 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# OPTIONS_GHC -Wall #-}
 
--- | FRP.Euphoria.Collection.Generic, with an interface specialised for
+-- | FRP.Euphoria.Internal.GenericCollection, with an interface specialised for
 -- "Enum" keys.
-module FRP.Euphoria.Collection.Enum
+module FRP.Euphoria.EnumCollection.Strict
     ( CollectionUpdate (..)
     , Collection
     -- * creating collections
@@ -29,15 +29,16 @@ module FRP.Euphoria.Collection.Enum
     , sequenceCollection
     ) where
 
-import Data.EnumMap.Lazy (EnumMap)
+import Data.EnumMap.Strict (EnumMap)
 import Data.Proxy (Proxy(..))
 
-import FRP.Euphoria.Collection.Generic hiding (filterCollection
+import FRP.Euphoria.Event
+import qualified FRP.Euphoria.Internal.GenericCollection as Gen
+import FRP.Euphoria.Internal.GenericCollection hiding (filterCollection
         , filterCollectionWithKey, justCollection, sequenceCollection
         , accumCollection, mapToCollection, simpleCollection
         , collectionFromDiscreteList)
-import qualified FRP.Euphoria.Collection.Generic as Gen
-import FRP.Euphoria.Event
+import FRP.Euphoria.Internal.Maplike
 
 filterCollection
     :: (Enum k, MonadSignalGen m)
@@ -45,7 +46,7 @@ filterCollection
     -> Collection k a
     -> m (Collection k a)
 filterCollection =
-    Gen.filterCollection (Proxy :: Proxy (EnumMap k))
+    Gen.filterCollection (Proxy :: Proxy (Strict EnumMap k))
 
 filterCollectionWithKey
     :: (Enum k, MonadSignalGen m)
@@ -53,21 +54,21 @@ filterCollectionWithKey
     -> Collection k a
     -> m (Collection k a)
 filterCollectionWithKey =
-    Gen.filterCollectionWithKey (Proxy :: Proxy (EnumMap k))
+    Gen.filterCollectionWithKey (Proxy :: Proxy (Strict EnumMap k))
 
 justCollection
     :: (Enum k, MonadSignalGen m)
     => Collection k (Maybe a)
     -> m (Collection k a)
 justCollection =
-    Gen.justCollection (Proxy :: Proxy (EnumMap k))
+    Gen.justCollection (Proxy :: Proxy (Strict EnumMap k))
 
 sequenceCollection
     :: (Enum k, MonadSignalGen m)
     => Collection k (SignalGen a)
     -> m (Collection k a)
 sequenceCollection =
-    Gen.sequenceCollection (Proxy :: Proxy (EnumMap k))
+    Gen.sequenceCollection (Proxy :: Proxy (Strict EnumMap k))
 
 -- Adds the necessary state for holding the existing [(k, a)] and creating
 -- the unique Event stream for each change of the collection.
@@ -76,14 +77,14 @@ accumCollection
     => Event (CollectionUpdate k a)
     -> m (Collection k a)
 accumCollection =
-    Gen.accumCollection (Proxy :: Proxy (EnumMap k))
+    Gen.accumCollection (Proxy :: Proxy (Strict EnumMap k))
 
 mapToCollection
     :: (Eq k, Eq a, Enum k, MonadSignalGen m)
     => Discrete (EnumMap k a)
     -> m (Collection k (Discrete a))
-mapToCollection =
-    Gen.mapToCollection
+mapToCollection xsD =
+    Gen.mapToCollection (Strict <$> xsD)
 
 simpleCollection
     :: (Enum k, MonadSignalGen m)
@@ -91,7 +92,7 @@ simpleCollection
     -> Event (a, Event ())
     -> m (Collection k a)
 simpleCollection =
-    Gen.simpleCollection (Proxy :: Proxy (EnumMap k))
+    Gen.simpleCollection (Proxy :: Proxy (Strict EnumMap k))
 
 collectionFromDiscreteList
     :: (Enum k, Eq a, MonadSignalGen m)
@@ -99,4 +100,4 @@ collectionFromDiscreteList
     -> Discrete [a]
     -> m (Collection k a)
 collectionFromDiscreteList =
-    Gen.collectionFromDiscreteList (Proxy :: Proxy (EnumMap k))
+    Gen.collectionFromDiscreteList (Proxy :: Proxy (Strict EnumMap k))

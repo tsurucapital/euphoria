@@ -18,7 +18,7 @@
 -- - FRP.Euphoria.Collection.Enum
 -- - FRP.Euphoria.Collection.Hashable
 --
-module FRP.Euphoria.Collection.Generic
+module FRP.Euphoria.Internal.GenericCollection
     ( CollectionUpdate (..)
     , Collection
     -- * creating collections

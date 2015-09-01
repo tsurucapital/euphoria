@@ -77,10 +77,12 @@ library
                      , FRP.Euphoria.Signal
                      , FRP.Euphoria.Update
                      , FRP.Euphoria.Collection
-                     , FRP.Euphoria.Collection.Enum
-                     , FRP.Euphoria.Collection.Generic
-                     , FRP.Euphoria.Collection.Hashable
+                     , FRP.Euphoria.EnumCollection.Lazy
+                     , FRP.Euphoria.EnumCollection.Strict
+                     , FRP.Euphoria.HashCollection.Lazy
+                     , FRP.Euphoria.HashCollection.Strict
                      , FRP.Euphoria.Abbrev
+                     , FRP.Euphoria.Internal.GenericCollection
                      , FRP.Euphoria.Internal.Maplike
   -- other-modules:
   build-depends:       HUnit

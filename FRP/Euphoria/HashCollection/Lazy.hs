@@ -1,8 +1,8 @@
 {-# OPTIONS_GHC -Wall #-}
 
--- | FRP.Euphoria.Collection.Generic, with an interface specialised for
+-- | FRP.Euphoria.Internal.GenericCollection, with an interface specialised for
 -- "Hashable" keys.
-module FRP.Euphoria.Collection.Hashable
+module FRP.Euphoria.HashCollection.Lazy
     ( CollectionUpdate (..)
     , Collection
     -- * creating collections
@@ -29,15 +29,16 @@ module FRP.Euphoria.Collection.Hashable
     ) where
 
 import Data.Hashable (Hashable)
-import Data.HashMap.Strict (HashMap)
+import Data.HashMap.Lazy (HashMap)
 import Data.Proxy (Proxy(..))
 
-import FRP.Euphoria.Collection.Generic hiding (filterCollection
+import FRP.Euphoria.Event
+import qualified FRP.Euphoria.Internal.GenericCollection as Gen
+import FRP.Euphoria.Internal.GenericCollection hiding (filterCollection
         , filterCollectionWithKey, justCollection, sequenceCollection
         , accumCollection, mapToCollection, simpleCollection
         , collectionFromDiscreteList)
-import qualified FRP.Euphoria.Collection.Generic as Gen
-import FRP.Euphoria.Event
+import FRP.Euphoria.Internal.Maplike
 
 filterCollection
     :: (Hashable k, Eq k, MonadSignalGen m)
@@ -45,7 +46,7 @@ filterCollection
     -> Collection k a
     -> m (Collection k a)
 filterCollection =
-    Gen.filterCollection (Proxy :: Proxy (HashMap k))
+    Gen.filterCollection (Proxy :: Proxy (Lazy HashMap k))
 
 filterCollectionWithKey
     :: (Hashable k, Eq k, MonadSignalGen m)
@@ -53,21 +54,21 @@ filterCollectionWithKey
     -> Collection k a
     -> m (Collection k a)
 filterCollectionWithKey =
-    Gen.filterCollectionWithKey (Proxy :: Proxy (HashMap k))
+    Gen.filterCollectionWithKey (Proxy :: Proxy (Lazy HashMap k))
 
 justCollection
     :: (Hashable k, Eq k, MonadSignalGen m)
     => Collection k (Maybe a)
     -> m (Collection k a)
 justCollection =
-    Gen.justCollection (Proxy :: Proxy (HashMap k))
+    Gen.justCollection (Proxy :: Proxy (Lazy HashMap k))
 
 sequenceCollection
     :: (Hashable k, Eq k, MonadSignalGen m)
     => Collection k (SignalGen a)
     -> m (Collection k a)
 sequenceCollection =
-    Gen.sequenceCollection (Proxy :: Proxy (HashMap k))
+    Gen.sequenceCollection (Proxy :: Proxy (Lazy HashMap k))
 
 -- Adds the necessary state for holding the existing [(k, a)] and creating
 -- the unique Event stream for each change of the collection.
@@ -76,14 +77,14 @@ accumCollection
     => Event (CollectionUpdate k a)
     -> m (Collection k a)
 accumCollection =
-    Gen.accumCollection (Proxy :: Proxy (HashMap k))
+    Gen.accumCollection (Proxy :: Proxy (Lazy HashMap k))
 
 mapToCollection
     :: (Eq k, Eq a, Hashable k, MonadSignalGen m)
     => Discrete (HashMap k a)
     -> m (Collection k (Discrete a))
-mapToCollection =
-    Gen.mapToCollection
+mapToCollection xsD =
+    Gen.mapToCollection (Lazy <$> xsD)
 
 simpleCollection
     :: (Enum k, Eq k, Hashable k, MonadSignalGen m)
@@ -91,7 +92,7 @@ simpleCollection
     -> Event (a, Event ())
     -> m (Collection k a)
 simpleCollection =
-    Gen.simpleCollection (Proxy :: Proxy (HashMap k))
+    Gen.simpleCollection (Proxy :: Proxy (Lazy HashMap k))
 
 collectionFromDiscreteList
     :: (Enum k, Eq k, Hashable k, Eq a, MonadSignalGen m)
@@ -99,4 +100,4 @@ collectionFromDiscreteList
     -> Discrete [a]
     -> m (Collection k a)
 collectionFromDiscreteList =
-    Gen.collectionFromDiscreteList (Proxy :: Proxy (HashMap k))
+    Gen.collectionFromDiscreteList (Proxy :: Proxy (Lazy HashMap k))

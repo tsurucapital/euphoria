@@ -4,7 +4,7 @@
 -- and `Collection.Hashable.mapToCollection` is exported as
 -- `hashmapToCollection`.
 module FRP.Euphoria.Collection
-    ( module FRP.Euphoria.Collection.Enum
+    ( module FRP.Euphoria.EnumCollection.Lazy
     , enummapToCollection
     , hashmapToCollection
     ) where
@@ -13,10 +13,10 @@ import Data.EnumMap.Lazy (EnumMap)
 import Data.HashMap.Strict (HashMap)
 import Data.Hashable (Hashable)
 
-import FRP.Euphoria.Collection.Enum hiding (mapToCollection)
+import FRP.Euphoria.EnumCollection.Lazy hiding (mapToCollection)
 
-import qualified FRP.Euphoria.Collection.Enum     as Enum
-import qualified FRP.Euphoria.Collection.Hashable as Hashable
+import qualified FRP.Euphoria.EnumCollection.Lazy   as Enum
+import qualified FRP.Euphoria.HashCollection.Strict as Hashable
 
 import FRP.Euphoria.Event
 
