@@ -41,6 +41,7 @@ module FRP.Euphoria.Internal.GenericCollection
     , filterCollection
     , filterCollectionWithKey
     , justCollection
+    , mapCollectionM
     , sequenceCollection
     ) where
 
@@ -125,6 +126,12 @@ instance SignalSet (Collection k a) where
 -- | Like 'fmap', but the Collection and interior 'Event' stream are memoized
 mapCollection :: MonadSignalGen m => (a -> b) -> Collection k a -> m (Collection k b)
 mapCollection = mapCollectionWithKey . const
+
+mapCollectionM
+    :: (M.Maplike c k, MonadSignalGen m)
+    => Proxy (c k) -> (a -> SignalGen b) -> Collection k a -> m (Collection k b)
+mapCollectionM p fn coll = do
+    sequenceCollection p =<< mapCollection fn coll
 
 -- | A version of 'mapCollection' which provides access to the key
 mapCollectionWithKey

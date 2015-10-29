@@ -26,6 +26,7 @@ module FRP.Euphoria.EnumCollection.Strict
     , filterCollection
     , filterCollectionWithKey
     , justCollection
+    , mapCollectionM
     , sequenceCollection
     ) where
 
@@ -37,7 +38,7 @@ import qualified FRP.Euphoria.Internal.GenericCollection as Gen
 import FRP.Euphoria.Internal.GenericCollection hiding (filterCollection
         , filterCollectionWithKey, justCollection, sequenceCollection
         , accumCollection, mapToCollection, simpleCollection
-        , collectionFromDiscreteList)
+        , collectionFromDiscreteList, mapCollectionM)
 import FRP.Euphoria.Internal.Maplike
 
 filterCollection
@@ -62,6 +63,11 @@ justCollection
     -> m (Collection k a)
 justCollection =
     Gen.justCollection (Proxy :: Proxy (Strict EnumMap k))
+
+mapCollectionM
+    :: (Enum k, MonadSignalGen m)
+    => (a -> SignalGen b) -> Collection k a -> m (Collection k b)
+mapCollectionM = Gen.mapCollectionM (Proxy :: Proxy (Strict EnumMap k))
 
 sequenceCollection
     :: (Enum k, MonadSignalGen m)
