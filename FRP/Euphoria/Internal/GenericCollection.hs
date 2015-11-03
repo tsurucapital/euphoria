@@ -127,11 +127,15 @@ instance SignalSet (Collection k a) where
 mapCollection :: MonadSignalGen m => (a -> b) -> Collection k a -> m (Collection k b)
 mapCollection = mapCollectionWithKey . const
 
+-- | @mapCollectionM p fn = mapCollection fn >=> sequenceCollection p@
 mapCollectionM
     :: (M.Maplike c k, MonadSignalGen m)
     => Proxy (c k) -> (a -> SignalGen b) -> Collection k a -> m (Collection k b)
 mapCollectionM p fn coll = do
-    sequenceCollection p =<< mapCollection fn coll
+    updatesE0 <- collectionToUpdates coll
+    updatesE1 <- generatorE $ traverse fn <$> updatesE0
+    updatesE2 <- memoE updatesE1
+    accumCollection p updatesE2
 
 -- | A version of 'mapCollection' which provides access to the key
 mapCollectionWithKey
@@ -195,9 +199,8 @@ sequenceCollection
     :: (M.Maplike c k, MonadSignalGen m)
     => Proxy (c k) -> Collection k (SignalGen a)
     -> m (Collection k a)
-sequenceCollection p col = collectionToUpdates col
-    >>= generatorE . fmap sequenceA
-    >>= accumCollection p
+sequenceCollection p coll =
+    mapCollectionM p id coll
 
 -- | A collection whose items are created by an event, and removed by
 -- another event.
