@@ -84,10 +84,11 @@ library
                      , FRP.Euphoria.Abbrev
                      , FRP.Euphoria.Internal.GenericCollection
                      , FRP.Euphoria.Internal.Maplike
+  other-modules:       FRP.Elerea.Simple.Compat
   -- other-modules:
   build-depends:       HUnit
                      , base >= 4.7 && < 4.9
-                     , elerea >= 2.7
+                     , elerea >= 2.7 && < 2.10
                      , enummapset-th >= 0.6
                      , deepseq
                      , hashable >= 1.2
