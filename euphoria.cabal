@@ -102,6 +102,10 @@ test-suite tests
   type:           exitcode-stdio-1.0
   main-is:        Main.hs
   hs-source-dirs: tests
+  other-modules:  FRP.Euphoria.EnumCollection.Lazy.Test
+                  FRP.Euphoria.Event.Test
+                  FRP.Euphoria.HashCollection.Strict.Test
+                  FRP.Euphoria.Update.Test
   ghc-options:    -Wall
   build-depends:  HUnit
                 , base
@@ -114,6 +118,10 @@ benchmark bench
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
     hs-source-dirs: benchmarks
+    other-modules:  FRP.Euphoria.EnumCollection.Lazy.Bench
+                    FRP.Euphoria.EnumCollection.Strict.Bench
+                    FRP.Euphoria.HashCollection.Lazy.Bench
+                    FRP.Euphoria.HashCollection.Strict.Bench
     ghc-options:    -Wall
     build-depends:  base
                   , criterion
