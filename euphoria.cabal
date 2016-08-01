@@ -67,6 +67,8 @@ category:            FRP
 build-type:          Simple
 cabal-version:       >=1.8
 homepage:            http://github.com/tsurucapital/euphoria
+tested-with:         GHC == 7.10.3
+                   , GHC == 8.0.1
 
 source-repository head
   type: git
@@ -84,10 +86,11 @@ library
                      , FRP.Euphoria.Abbrev
                      , FRP.Euphoria.Internal.GenericCollection
                      , FRP.Euphoria.Internal.Maplike
+  other-modules:       FRP.Elerea.Simple.Compat
   -- other-modules:
   build-depends:       HUnit
-                     , base >= 4.7 && < 4.9
-                     , elerea >= 2.7
+                     , base >= 4.7 && < 4.10
+                     , elerea >= 2.7 && < 2.10
                      , enummapset-th >= 0.6
                      , deepseq
                      , hashable >= 1.2
@@ -99,6 +102,10 @@ test-suite tests
   type:           exitcode-stdio-1.0
   main-is:        Main.hs
   hs-source-dirs: tests
+  other-modules:  FRP.Euphoria.EnumCollection.Lazy.Test
+                  FRP.Euphoria.Event.Test
+                  FRP.Euphoria.HashCollection.Strict.Test
+                  FRP.Euphoria.Update.Test
   ghc-options:    -Wall
   build-depends:  HUnit
                 , base
@@ -111,6 +118,10 @@ benchmark bench
     type:           exitcode-stdio-1.0
     main-is:        Main.hs
     hs-source-dirs: benchmarks
+    other-modules:  FRP.Euphoria.EnumCollection.Lazy.Bench
+                    FRP.Euphoria.EnumCollection.Strict.Bench
+                    FRP.Euphoria.HashCollection.Lazy.Bench
+                    FRP.Euphoria.HashCollection.Strict.Bench
     ghc-options:    -Wall
     build-depends:  base
                   , criterion

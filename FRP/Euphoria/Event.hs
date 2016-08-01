@@ -132,7 +132,7 @@ import Data.Maybe
 import Data.Typeable
 import Debug.Trace
 import FRP.Euphoria.Signal
-import FRP.Elerea.Simple (externalMulti, effectful1, until, stateful)
+import FRP.Elerea.Simple.Compat (externalMulti, effectful1, till, stateful)
 import Prelude hiding (until)
 
 -- | @Event a@ represents a stream of events whose occurrences carry
@@ -398,7 +398,7 @@ generalPrefixE
   -> m (Event a)
 generalPrefixE prefixTaker (Event evt) = do
     rec
-        done <- liftSignalGen $ until $ not . fst <$> active_occs
+        done <- liftSignalGen $ till $ not . fst <$> active_occs
         prevDone <- delayS False done
         eventSource <- transferS evt upd prevDone
         active_occs <- prefixTaker (join eventSource)
