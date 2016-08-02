@@ -625,11 +625,9 @@ switchDE = switchD
 freezeD :: MonadSignalGen m => Event () -> Discrete a -> m (Discrete a)
 freezeD evt dis = do
     dis' <- memoD dis
-    now <- onCreation ()
     sig <- discreteToSignal dis'
-    initialization <- takeE 1 $ const <$> sig <@> now
-    filteredChanges <- switchD =<< stepperD (changesD dis') (mempty <$ evt)
-    stepperD (error "freezeD: not initialized") $ initialization `mappend` filteredChanges
+    evt1 <- takeE 1 evt
+    switchD =<< stepperD dis' (pure <$> sig <@ evt1)
 
 -- | Convert a 'Signal' to an equivalent 'Discrete'. The resulting discrete
 -- is always considered to \'possibly have changed\'.

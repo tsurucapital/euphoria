@@ -51,3 +51,11 @@ case_splitOnE = do
         ev2 <- eventFromList [[], [()], [], [], [()]]
         eventToSignal <$> splitOnE ev2 ev1
     result @?= [[], [[1,2,3,4]], [], [], [[5,6,7,8]]]
+
+case_freezeD :: Assertion
+case_freezeD = do
+    result <- networkToList 5 $ do
+        ev <- eventFromList [[], [], [()], [], [()]]
+        dis <- signalToDiscrete <$> signalFromList [1..]
+        discreteToSignal =<< freezeD ev dis
+    result @?= [1, 2, 3, 3, 3 :: Int]
