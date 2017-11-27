@@ -89,7 +89,7 @@ library
   other-modules:       FRP.Elerea.Simple.Compat
   -- other-modules:
   build-depends:       HUnit
-                     , base >= 4.7 && < 4.10
+                     , base >= 4.7 && < 5
                      , elerea >= 2.7 && < 2.10
                      , enummapset-th >= 0.6
                      , deepseq
