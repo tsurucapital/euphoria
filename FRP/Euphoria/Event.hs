@@ -95,7 +95,6 @@ module FRP.Euphoria.Event
 , Apply (..)
 -- $app_discrete_maybe
 , (<$?>), (<?*?>), (<-*?>), (<?*->)
-, EasyApply (..)
 -- * Switching
 , switchD
 , switchDE
@@ -707,43 +706,6 @@ fmD <?*-> valD = do
     case fm of
         Just f -> Just . f <$> valD
         Nothing -> return Nothing
-
-infixl 4 <~~>
--- | When using applicative style and mixing @('Discrete' a)@ and
--- @('Discrete' ('Maybe' a))@, EasyApply's \<~~> will attempt to choose the
--- right combinator. This is an experimental idea, and may be more
--- trouble than it's worth in practice.
---
--- GHC will fail to find instances under various circumstances, such
--- as when when anonymous functions are applied to tuples, so you will
--- have to fall back to using explicit combinators.
-class EasyApply a b c | a b -> c where
-  (<~~>) :: a -> b -> c
-
-instance EasyApply (a -> b) (Discrete a) (Discrete b) where
-    (<~~>) = (<$>)
-instance EasyApply (Discrete (a -> b)) (Discrete a) (Discrete b) where
-    (<~~>) = (<*>)
-instance EasyApply (a -> b) (Discrete (Maybe a)) (Discrete (Maybe b)) where
-    (<~~>) = (<$?>)
-instance EasyApply (Discrete (Maybe (a -> b))) (Discrete (Maybe a)) (Discrete (Maybe b)) where
-    (<~~>) = (<?*?>)
-instance EasyApply (Discrete (a -> b)) (Discrete (Maybe a)) (Discrete (Maybe b)) where
-    (<~~>) = (<-*?>)
-instance EasyApply (Discrete (Maybe (a -> b))) (Discrete a) (Discrete (Maybe b)) where
-    (<~~>) = (<?*->)
-
-instance EasyApply (Signal (a -> b)) (Event a) (Event b) where
-    (<~~>) = apply
-
--- Some instances which may be less common
-instance EasyApply (Maybe (a -> b)) (Discrete a) (Discrete (Maybe b)) where
-    Just f <~~> valD = Just . f <$> valD
-    Nothing <~~> _ = return Nothing
-
--- Add more as necessary. TODO the application of some more brainpower
--- should be able to get all possible instances using type-level
--- programming, I think.
 
 -- Evaluation control
 
