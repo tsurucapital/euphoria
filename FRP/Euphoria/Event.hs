@@ -298,11 +298,15 @@ expandE (Event evt) = Event $ f <$> evt
 
 -- | Like 'mapM' over events.
 --
--- Beware: observable behaviour could depend on GCs! Using this function,
--- IO actions will begin to happen when the subnetwork is created, and will
--- cease when the event is cleaned up. This happens in the first GC after
--- the event has become unreferenced - ie. somewhat randomly. You should
--- probably only use this function for reading, not writing.
+-- Beware: observable behaviour could depend on GCs!
+--
+-- Keep in mind that the supplied @mkAction :: t -> 'IO' a@ action will
+-- continue to be called even after the resulting @'Event' a@ is no longer
+-- used, until it is eventually (and unpredictably) GC'd. Therefore, you
+-- should only use this for impure-but-unobservable actions, e.g. reading
+-- from a DB.
+--
+-- It would be a very Bad Idea™ to do things that change the world.
 mapEIO :: MonadSignalGen m => (t -> IO a) -> Event t -> m (Event a)
 mapEIO mkAction (Event evt) = Event <$> liftSignalGen (effectful1 (mapM mkAction) evt)
 
