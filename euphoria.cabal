@@ -67,8 +67,8 @@ category:            FRP
 build-type:          Simple
 cabal-version:       >=1.8
 homepage:            http://github.com/tsurucapital/euphoria
-tested-with:         GHC == 7.10.3
-                   , GHC == 8.0.1
+tested-with:         GHC == 8.6.4
+                   , GHC == 8.8.3
 
 source-repository head
   type: git
@@ -91,12 +91,13 @@ library
   build-depends:       HUnit
                      , base >= 4.7 && < 5
                      , elerea >= 2.7 && < 2.10
-                     , enummapset-th >= 0.6
+                     , enummapset-th >= 0.6.2
                      , deepseq
                      , hashable >= 1.2
                      , containers >= 0.5.5
                      , unordered-containers >= 0.2.5
                      , transformers >= 0.4.1
+  ghc-options: -Wall -Wcompat
 
 test-suite tests
   type:           exitcode-stdio-1.0

@@ -126,8 +126,9 @@ import Control.Monad.Fix
 import Control.Monad.IO.Class
 import Data.Either (partitionEithers, lefts, rights)
 import Data.List (foldl')
-import Data.Monoid
+import Data.Monoid hiding ((<>))
 import Data.Maybe
+import Data.Semigroup
 import Data.Typeable
 import Debug.Trace
 import FRP.Euphoria.Signal
@@ -157,9 +158,11 @@ newtype Discrete a = Discrete (Signal (Bool, a))
 
 -- | Event streams can be merged together. In case of simultaneous occurrences,
 -- occurrences from the left stream comes first.
+instance Semigroup (Event a) where
+  Event a <> Event b = Event $ (++) <$> a <*> b
+
 instance Monoid (Event a) where
   mempty = Event $ pure []
-  Event a `mappend` Event b = Event $ (++) <$> a <*> b
 
 infixl 4 <@>, <@
 
