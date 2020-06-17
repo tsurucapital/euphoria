@@ -157,9 +157,13 @@ newtype Discrete a = Discrete (Signal (Bool, a))
 
 -- | Event streams can be merged together. In case of simultaneous occurrences,
 -- occurrences from the left stream comes first.
+instance Semigroup (Event a) where
+  Event a <> Event b = Event $ (++) <$> a <*> b
+
+-- | Event streams can be merged together. In case of simultaneous occurrences,
+-- occurrences from the left stream comes first.
 instance Monoid (Event a) where
   mempty = Event $ pure []
-  Event a `mappend` Event b = Event $ (++) <$> a <*> b
 
 infixl 4 <@>, <@
 

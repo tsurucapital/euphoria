@@ -8,7 +8,6 @@ import Control.Applicative ((<$>), (<*>))
 import Data.Monoid (mappend)
 #endif
 
-import Data.Maybe (fromMaybe)
 
 import Test.Framework (Test)
 import Test.Framework.TH
@@ -31,7 +30,7 @@ case_startUpdateNetwork = do
     val1 <- sample
     val2 <- sample
 
-    [val0, val1, val2] @?= ["abcd", "", "e"]
+    [val0, val1, val2] @?= [Just "abcd", Nothing, Just "e"]
 
 case_skip :: Assertion
 case_skip = do
@@ -59,32 +58,14 @@ case_mappendUpdate = do
     step
     val2 <- sample
 
-    val0 @?= "abcdf"
-    val1 @?= "g"
-    val2 @?= "ehij"
-
-case_applicativeUpdate :: Assertion
-case_applicativeUpdate = do
-    (sample, step) <- startUpdateNetwork $ do
-        update0 <- updateUseAll <$> eventFromList [["a"], ["bc","d"], [], ["e"]]
-        update1 <- updateUseAll <$> eventFromList [[[1]], [], [[2]], [[3,4],[5::Int]]]
-        return $ f <$> update0 <*> update1
-    step
-    val0 <- sample
-    val1 <- sample
-    step
-    val2 <- sample
-
-    val0 @?= [([1], "abcd")]
-    val1 @?= [([2], "")]
-    val2 @?= [([3,4,5], "e")]
-        where
-        f str num = [(num, str)]
+    val0 @?= Just "abcdf"
+    val1 @?= Just "g"
+    val2 @?= Just "ehij"
 
 case_switchUD :: Assertion
 case_switchUD = do
     (sample, step) <- startUpdateNetwork $ do
-        update0 <- fmap (fromMaybe "") . updateUseLast <$>
+        update0 <- updateUseLast <$>
             eventFromList [["1"], ["2", "3"], ["4"], ["5"]]
         update1 <- updateUseAll <$> eventFromList [["a"], ["bc","d"], [], ["e"]]
         updatesD <- stepperD update0 =<< eventFromList [[], [], [], [update1]]
@@ -94,5 +75,5 @@ case_switchUD = do
     step
     val1 <- sample
 
-    val0 @?= "1"
-    val1 @?= "4e"
+    val0 @?= Just "1"
+    val1 @?= Just "4e"
