@@ -78,7 +78,7 @@ common common
     these ^>= 1.1,
     transformers ^>= { 0.4.1, 0.5 },
     unordered-containers ^>= 0.2.0.0
-  ghc-options: -Wall
+  ghc-options: -Wall -Werror
   default-language: Haskell2010
 
 library
@@ -121,7 +121,6 @@ benchmark bench
     FRP.Euphoria.EnumCollection.Strict.Bench,
     FRP.Euphoria.HashCollection.Lazy.Bench,
     FRP.Euphoria.HashCollection.Strict.Bench
-  ghc-options: -Wall
   build-depends:
     euphoria,
     criterion
