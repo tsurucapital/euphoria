@@ -1,17 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# OPTIONS_GHC -Wall #-}
-
-#if __GLASGOW_HASKELL__ <= 706
-{-# LANGUAGE DoRec #-}
-#else
 {-# LANGUAGE RecursiveDo #-}
-#endif
 
 -- | Event/discrete layer constructed on top of Elerea.
 -- The API is largely inspired by reactive-banana.
@@ -728,12 +721,6 @@ rnfD = forceD . fmap force
 -- | Like rnfD, but for Event.
 rnfE :: (NFData a, MonadSignalGen m) => Event a -> m (Event a)
 rnfE = forceE . fmap force
-
-#if !MIN_VERSION_deepseq(1,2,0)
-force :: NFData a => a -> a
-force x = x `deepseq` x
-#endif
-
 
 --------------------------------------------------------------------------------
 -- SignalSet

@@ -108,10 +108,8 @@ test-suite tests
     FRP.Euphoria.Update.Test
   build-depends:
     euphoria,
-    HUnit,
-    test-framework,
-    test-framework-hunit,
-    test-framework-th
+    tasty,
+    tasty-hunit
 
 benchmark bench
   import: common
