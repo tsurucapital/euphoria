@@ -69,6 +69,8 @@ instance (Semigroup a) => Semigroup (Update a) where
         (these f g (\a b -> f a <> g b))
         (fmap This x <> fmap That y)
 
+    stimes n = fmap (stimes n)
+
 instance (Monoid a) => Monoid (Update a) where
     mempty = Update (const mempty) (mempty :: Event ())
 
