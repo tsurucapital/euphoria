@@ -14,6 +14,8 @@ jobs:
       uses: actions/setup-haskell@v1.1.1
       with:
         ghc-version: ${{ matrix.ghc }}
+    - name: Build dependencies
+      run: cabal v2-build --only-dependencies
     - name: Build euphoria
       run: cabal v2-build
     - name: Test euphoria
