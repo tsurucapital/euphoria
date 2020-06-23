@@ -10,7 +10,6 @@ module FRP.Euphoria.Internal.Maplike
     , Strict(..)
     ) where
 
-import Data.Function
 import Data.Hashable (Hashable)
 import qualified Data.Map.Lazy       as ML
 import qualified Data.Map.Strict     as MS

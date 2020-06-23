@@ -131,7 +131,7 @@ import Data.Maybe
 import Data.Typeable
 import Debug.Trace
 import FRP.Euphoria.Signal
-import FRP.Elerea.Simple.Compat (externalMulti, effectful1, till, stateful)
+import FRP.Elerea.Simple (externalMulti, effectful1, till, stateful)
 import Prelude hiding (until)
 
 -- | @Event a@ represents a stream of events whose occurrences carry
