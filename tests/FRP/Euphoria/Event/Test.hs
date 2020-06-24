@@ -1,41 +1,36 @@
-{-# LANGUAGE TemplateHaskell #-}
-{-# LANGUAGE CPP #-}
-
 module FRP.Euphoria.Event.Test (tests) where
 
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>))
-import Data.Monoid (mempty)
-#endif
-
-import Test.Framework (Test)
-import Test.Framework.TH
-import Test.Framework.Providers.HUnit
-import Test.HUnit hiding (Test)
-
 import FRP.Euphoria.Event
+import Test.Tasty
+import Test.Tasty.HUnit
 
-tests :: Test
-tests = $(testGroupGenerator)
+tests :: TestTree
+tests = testGroup "FRP.Euphoria.Event"
+    [ testTakeE
+    , testTakeWhileE
+    , testGroupE
+    , testSplitOnE
+    , testFreezeD
+    ]
 
-case_takeE :: Assertion
-case_takeE = do
+testTakeE :: TestTree
+testTakeE = testCase "takeE" $ do
     result <- networkToList 5 $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [4]]
         evt2 <- takeE 3 evt
         accumS 0 $ (+) <$> evt2
     result @?= [1, 2, 4, 4, 4]
 
-case_takeWhileE :: Assertion
-case_takeWhileE = do
+testTakeWhileE :: TestTree
+testTakeWhileE = testCase "takeWhileE" $ do
     result <- networkToList 5 $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [4]]
         evt2 <- takeWhileE (<3) evt
         accumS 0 $ (+) <$> evt2
     result @?= [1, 2, 4, 4, 4]
 
-case_groupE :: Assertion
-case_groupE = do
+testGroupE :: TestTree
+testGroupE = testCase "groupE" $ do
     result <- networkToList 5 $ do
         evt <- eventFromList [[1], [1::Int], [2,3], [], [3,3,4]]
         evt2 <- groupE evt
@@ -44,16 +39,16 @@ case_groupE = do
         return $ eventToSignal $ joinEventSignal dyn
     result @?= [[], [], [3], [], [3,3]]
 
-case_splitOnE :: Assertion
-case_splitOnE = do
+testSplitOnE :: TestTree
+testSplitOnE = testCase "splitOnE" $ do
     result <- networkToList 5 $ do
         ev1 <- eventFromList [[1::Int], [2,3,4], [], [5,6], [7,8]]
         ev2 <- eventFromList [[], [()], [], [], [()]]
         eventToSignal <$> splitOnE ev2 ev1
     result @?= [[], [[1,2,3,4]], [], [], [[5,6,7,8]]]
 
-case_freezeD :: Assertion
-case_freezeD = do
+testFreezeD :: TestTree
+testFreezeD = testCase "freezeD" $ do
     result <- networkToList 5 $ do
         ev <- eventFromList [[], [], [()], [], [()]]
         dis <- signalToDiscrete <$> signalFromList [1..]

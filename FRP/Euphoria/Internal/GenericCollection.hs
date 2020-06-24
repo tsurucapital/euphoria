@@ -1,11 +1,9 @@
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveFoldable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE DeriveTraversable #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE RecursiveDo #-}
-{-# OPTIONS_GHC -Wall #-}
 
 -- | Collection signals with incremental updates.
 --
@@ -46,13 +44,6 @@ module FRP.Euphoria.Internal.GenericCollection
     ) where
 
 import Prelude hiding (lookup)
-
-#if __GLASGOW_HASKELL__ < 710
-import Control.Applicative ((<$>), (<*>), (<$), pure)
-import Data.Foldable (Foldable)
-import Data.Monoid (mappend, mempty)
-import Data.Traversable (Traversable, sequenceA)
-#endif
 
 import Control.Monad (join)
 import Control.DeepSeq

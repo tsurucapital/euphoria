@@ -1,21 +1,18 @@
-{-# LANGUAGE TemplateHaskell #-}
-module FRP.Euphoria.HashCollection.Strict.Test
-    ( tests
-    ) where
-
-import Test.Framework (Test)
-import Test.Framework.TH
-import Test.Framework.Providers.HUnit
-import Test.HUnit hiding (Test)
+module FRP.Euphoria.HashCollection.Strict.Test (tests) where
 
 import FRP.Euphoria.Event
 import FRP.Euphoria.HashCollection.Strict
+import Test.Tasty
+import Test.Tasty.HUnit
 
-tests :: Test
-tests = $(testGroupGenerator)
+tests :: TestTree
+tests = testGroup "FRP.Euphoria.HashCollection.Strict"
+    [ testSwitchD
+    , testMapCollection
+    ]
 
-case_switchCollection :: Assertion
-case_switchCollection = do
+testSwitchD :: TestTree
+testSwitchD = testCase "switchD" $ do
     result <- networkToList 5 $ do
         col0 <- collectionFromDiscreteList (0::Int) =<< mkD [[10::Int], [], [10,20,30], [20,30], [30]]
         col1 <- collectionFromDiscreteList 0 =<< mkD [[11], [], [11,21,31], [21,31], [31]]
@@ -40,8 +37,8 @@ case_switchCollection = do
     where
         mkD list = signalToDiscrete <$> signalFromList list
 
-case_mapCollection :: Assertion
-case_mapCollection = do
+testMapCollection :: TestTree
+testMapCollection = testCase "mapCollection" $ do
     result <- networkToList 1 $ do
         col <- mapCollection show $
             collectionFromList [(0 :: Int, 1 :: Int), (1, 2), (2, 3)]

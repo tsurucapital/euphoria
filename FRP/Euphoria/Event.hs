@@ -1,17 +1,10 @@
 {-# LANGUAGE BangPatterns #-}
-{-# LANGUAGE CPP #-}
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# OPTIONS_GHC -Wall #-}
-
-#if __GLASGOW_HASKELL__ <= 706
-{-# LANGUAGE DoRec #-}
-#else
 {-# LANGUAGE RecursiveDo #-}
-#endif
 
 -- | Event/discrete layer constructed on top of Elerea.
 -- The API is largely inspired by reactive-banana.
@@ -131,7 +124,7 @@ import Data.Maybe
 import Data.Typeable
 import Debug.Trace
 import FRP.Euphoria.Signal
-import FRP.Elerea.Simple.Compat (externalMulti, effectful1, till, stateful)
+import FRP.Elerea.Simple (externalMulti, effectful1, till, stateful)
 import Prelude hiding (until)
 
 -- | @Event a@ represents a stream of events whose occurrences carry
@@ -157,9 +150,13 @@ newtype Discrete a = Discrete (Signal (Bool, a))
 
 -- | Event streams can be merged together. In case of simultaneous occurrences,
 -- occurrences from the left stream comes first.
+instance Semigroup (Event a) where
+  Event a <> Event b = Event $ (++) <$> a <*> b
+
+-- | Event streams can be merged together. In case of simultaneous occurrences,
+-- occurrences from the left stream comes first.
 instance Monoid (Event a) where
   mempty = Event $ pure []
-  Event a `mappend` Event b = Event $ (++) <$> a <*> b
 
 infixl 4 <@>, <@
 
@@ -724,12 +721,6 @@ rnfD = forceD . fmap force
 -- | Like rnfD, but for Event.
 rnfE :: (NFData a, MonadSignalGen m) => Event a -> m (Event a)
 rnfE = forceE . fmap force
-
-#if !MIN_VERSION_deepseq(1,2,0)
-force :: NFData a => a -> a
-force x = x `deepseq` x
-#endif
-
 
 --------------------------------------------------------------------------------
 -- SignalSet
