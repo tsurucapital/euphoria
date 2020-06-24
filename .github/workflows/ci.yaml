@@ -15,12 +15,12 @@ jobs:
       with:
         ghc-version: ${{ matrix.ghc }}
     - name: Build euphoria dependencies
-      run: cabal v2-build --only-dependencies
+      run: cabal v2-build --only-dependencies --disable-optimization
     - name: Build euphoria
-      run: cabal v2-build
+      run: cabal v2-build --disable-optimization
     - name: Build tests dependencies
-      run: cabal v2-build --enable-tests --only-dependencies
+      run: cabal v2-build --enable-tests --only-dependencies --disable-optimization
     - name: Build tests
-      run: cabal v2-build --enable-tests
+      run: cabal v2-build --enable-tests --disable-optimization
     - name: Run tests
-      run: cabal v2-test
+      run: cabal v2-test --disable-optimization
