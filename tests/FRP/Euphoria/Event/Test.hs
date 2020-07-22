@@ -8,15 +8,21 @@ import Control.Applicative ((<$>))
 import Data.Monoid (mempty)
 #endif
 
-import Test.Framework (Test)
-import Test.Framework.TH
+import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
 import FRP.Euphoria.Event
 
 tests :: Test
-tests = $(testGroupGenerator)
+tests = testGroup "Event"
+    [ testCase "takeE" case_takeE
+    , testCase "takeWhileE" case_takeWhileE
+    , testCase "groupE" case_groupE
+    , testCase "splitOnE" case_splitOnE
+    , testCase "freezeD" case_freezeD
+    ]
+
 
 case_takeE :: Assertion
 case_takeE = do

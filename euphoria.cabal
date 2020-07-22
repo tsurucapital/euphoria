@@ -113,7 +113,6 @@ test-suite tests
                 , euphoria
                 , test-framework
                 , test-framework-hunit
-                , test-framework-th
 
 benchmark bench
     type:           exitcode-stdio-1.0

@@ -3,8 +3,7 @@ module FRP.Euphoria.EnumCollection.Lazy.Test
     ( tests
     ) where
 
-import Test.Framework (Test)
-import Test.Framework.TH
+import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
@@ -12,7 +11,10 @@ import FRP.Euphoria.Event
 import FRP.Euphoria.EnumCollection.Lazy
 
 tests :: Test
-tests = $(testGroupGenerator)
+tests = testGroup "EnumCollection.Lazy"
+    [ testCase "switchCollection" case_switchCollection
+    , testCase "mapCollection" case_mapCollection
+    ]
 
 case_switchCollection :: Assertion
 case_switchCollection = do
