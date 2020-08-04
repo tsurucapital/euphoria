@@ -10,8 +10,7 @@ import Data.Monoid (mappend)
 
 import Data.Maybe (fromMaybe)
 
-import Test.Framework (Test)
-import Test.Framework.TH
+import Test.Framework
 import Test.Framework.Providers.HUnit
 import Test.HUnit hiding (Test)
 
@@ -19,7 +18,13 @@ import FRP.Euphoria.Event
 import FRP.Euphoria.Update
 
 tests :: Test
-tests = $(testGroupGenerator)
+tests = testGroup "Update"
+    [ testCase "startUpdateNetwork" case_startUpdateNetwork
+    , testCase "skip" case_skip
+    , testCase "mappendUpdate" case_mappendUpdate
+    , testCase "applicativeUpdate" case_applicativeUpdate
+    , testCase "switchUD" case_switchUD
+    ]
 
 case_startUpdateNetwork :: Assertion
 case_startUpdateNetwork = do
